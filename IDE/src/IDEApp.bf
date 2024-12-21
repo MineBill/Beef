@@ -6909,6 +6909,7 @@ namespace IDE
 			editWidgetContent.mHiliteColor = 0xFF384858;
 			editWidgetContent.mUnfocusedHiliteColor = 0x80384858;
 			editWidgetContent.mHiliteCurrentLine = mSettings.mEditorSettings.mHiliteCurrentLine;
+			editWidgetContent.mUseFatCursor = mSettings.mEditorSettings.mCursorShape == .Block;
 
 			return editWidget;
 		}
