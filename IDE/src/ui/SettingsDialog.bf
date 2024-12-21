@@ -107,6 +107,7 @@ namespace IDE.ui
 			AddPropertiesItem(category, "Show Locator Animation", "mShowLocatorAnim");
 			AddPropertiesItem(category, "Hilite Symbol at Cursor", "mHiliteCursorReferences");
 			AddPropertiesItem(category, "Hilite Current Line", "mHiliteCurrentLine");
+			AddPropertiesItem(category, "Cursor Shape", "mCursorShape");
 
 			(?, propEntry) = AddPropertiesItem(category, "Spell Check", "mSpellCheckEnabled");
 			var resetButton = new DarkButton();

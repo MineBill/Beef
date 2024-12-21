@@ -62,6 +62,7 @@ namespace Beefy.theme.dark
 		public uint32 mViewWhiteSpaceColor;
 		public bool mScrollToStartOnLostFocus;
 		public bool mHiliteCurrentLine;
+		public bool mUseFatCursor = false;
 		public Dictionary<int32, Embed> mEmbeds = new .() ~ DeleteDictionaryAndValues!(_);
 		public Embed mEmbedSelected;
 		public Range? mLineRange;
@@ -605,7 +606,7 @@ namespace Beefy.theme.dark
 			    else
 			    {
 					using (g.PushColor(Color.Mult(cursorColor, Color.Get(brightness))))
-			            g.FillRect(x, y, Math.Max(1.0f, GS!(1)), lineSpacing);
+			            g.FillRect(x, y, Math.Max(mUseFatCursor ? mCharWidth : 1.0f, GS!(1)), lineSpacing);
 			    }
 			    drewCursor = true;
 			}

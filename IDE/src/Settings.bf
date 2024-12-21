@@ -668,6 +668,12 @@ namespace IDE
 				Build
 			}
 
+			public enum CursorShapeKind
+			{
+				Line,
+				Block
+			}
+
 			public List<String> mFonts = new .() ~ DeleteContainerAndItems!(_);
 			public float mFontSize = 12;
 			public AutoCompleteShowKind mAutoCompleteShowKind = .PanelIfVisible;
@@ -695,6 +701,7 @@ namespace IDE
 			public bool mLeftAlignPreprocessor = true;
 			public TabsOrSpaces mTabsOrSpaces = .Tabs;
 			public int32 mTabSize = 4;
+			public CursorShapeKind mCursorShape = .Line;
 
 			public void Serialize(StructuredData sd)
 			{
@@ -713,6 +720,7 @@ namespace IDE
 				sd.Add("ShowLocatorAnim", mShowLocatorAnim);
 				sd.Add("HiliteCursorReferences", mHiliteCursorReferences);
 				sd.Add("HiliteCurrentLine", mHiliteCurrentLine);
+				sd.Add("CursorShape", mCursorShape);
 				sd.Add("LockEditing", mLockEditing);
 				sd.Add("LockEditingWhenDebugging", mLockEditingWhenDebugging);
 				sd.Add("EmitCompiler", mEmitCompiler);
@@ -750,6 +758,7 @@ namespace IDE
 				sd.Get("ShowLocatorAnim", ref mShowLocatorAnim);
 				sd.Get("HiliteCursorReferences", ref mHiliteCursorReferences);
 				sd.Get("HiliteCurrentLine", ref mHiliteCurrentLine);
+				sd.Get("CursorShape", ref mCursorShape);
 				sd.Get("LockEditing", ref mLockEditing);
 				sd.Get("LockEditingWhenDebugging", ref mLockEditingWhenDebugging);
 				sd.Get("EmitCompiler", ref mEmitCompiler);
@@ -1360,7 +1369,11 @@ namespace IDE
 
 			for (let value in gApp.mFileEditData.Values)
 				if (value.mEditWidget != null)
-					((SourceEditWidgetContent)value.mEditWidget.Content).mHiliteCurrentLine = gApp.mSettings.mEditorSettings.mHiliteCurrentLine;
+				{
+					let widget = ((SourceEditWidgetContent)value.mEditWidget.Content);
+					widget.mHiliteCurrentLine = gApp.mSettings.mEditorSettings.mHiliteCurrentLine;
+					widget.mUseFatCursor = gApp.mSettings.mEditorSettings.mCursorShape == .Block;
+				}
 
 			if (!mWakaTimeKey.IsEmpty)
 			{
