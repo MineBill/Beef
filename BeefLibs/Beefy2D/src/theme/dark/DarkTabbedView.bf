@@ -167,7 +167,7 @@ namespace Beefy.theme.dark
 			{
 				if (mIsRightTab == true)
 				{
-					mTextColor = Color.White;
+					mTextColor = DarkTheme.COLOR_TEXT;
 
 					DarkTabbedView darkTabbedView = mTabbedView as DarkTabbedView;
 					darkTabbedView.SetRightTab(null, false);

@@ -6886,7 +6886,7 @@ namespace IDE
 		void MakeTabPermanent(DarkTabbedView.DarkTabButton tabButton)
 		{
 			tabButton.mDragHelper.mAllowDrag = false;
-			tabButton.mTextColor = Color.White;
+			tabButton.mTextColor = DarkTheme.COLOR_TEXT;
 			tabButton.mIsRightTab = false;
 			var darkTabbedView = (DarkTabbedView)tabButton.mTabbedView;
 			darkTabbedView.SetRightTab(null, false);
@@ -7271,7 +7271,7 @@ namespace IDE
 					Debug.Assert(tabbedView.mRightTab == null);
 				}
 
-				newTabButton.mTextColor = 0xFFC8C8C8;
+				newTabButton.mTextColor = DarkTheme.COLOR_TEXT;
 				newTabButton.mIsRightTab = true;
 				tabbedView.SetRightTab(newTabButton);
 			}
