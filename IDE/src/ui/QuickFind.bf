@@ -227,7 +227,10 @@ namespace IDE.ui
             {
                 if (evt.mSender == mFindEditWidget)
                 {
-                    FindNext(1, true);
+					if (evt.mKeyFlags.HasFlag(.Shift))
+                    	FindNext(-1, true);
+					else
+						FindNext(1, true);
                 }
                 else if (evt.mSender == mReplaceEditWidget)
                 {
