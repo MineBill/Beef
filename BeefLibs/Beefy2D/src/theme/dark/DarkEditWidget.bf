@@ -618,8 +618,9 @@ namespace Beefy.theme.dark
 			    }
 			    else
 			    {
+					const int CursorWidth = 2;
 					using (g.PushColor(Color.Mult(cursorColor, Color.Get(brightness))))
-			            g.FillRect(x, y + textYOffset, 2, fontLineSpacing);
+			            g.FillRect(x, y + textYOffset, CursorWidth, fontLineSpacing);
 			    }
 			    drewCursor = true;
 			}
