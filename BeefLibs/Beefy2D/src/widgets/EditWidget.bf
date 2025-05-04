@@ -996,41 +996,8 @@ namespace Beefy.widgets
 			}
             else if ((btn == 0) && (btnCount >= 2) && (!mWidgetWindow.IsKeyDown(KeyCode.Shift)))
             {
-                // Select word
-                StartSelection();
-
-                int cursorTextPos = CursorTextPos;
-                int textPos = cursorTextPos;
-
-                if (mData.mTextLength == 0)
-                {   
-                    //Nothing
-                }
-                else if ((textPos < mData.mTextLength) && (!IsNonBreakingChar((char8)mData.mText[textPos].mChar)))
-                {                
-   					if ((char8)mData.mText[textPos].mChar == '\n')
-						return;
-                    mSelection.ValueRef.mEndPos++;
-                }
-                else
-                {
-                    while ((textPos > 0) && (IsNonBreakingChar((char8)mData.mText[textPos - 1].mChar)))
-                    {
-                        mSelection.ValueRef.mStartPos--;
-                        textPos--;
-                    }
-
-                    textPos = cursorTextPos + 1;
-                    while ((textPos <= mData.mTextLength) && ((textPos == mData.mTextLength) || (mData.mText[textPos - 1].mChar != '\n')) &&
-                        (IsNonBreakingChar((char8)mData.mText[textPos - 1].mChar)))
-                    {
-                        mSelection.ValueRef.mEndPos++;
-                        textPos++;
-                    }
-                }
-
+				SelectWord();
 				mDragSelectionUnion = mSelection;
-				CursorTextPos = mSelection.Value.MaxPos;
             }
             else if (!mWidgetWindow.IsKeyDown(KeyCode.Shift))
             {
@@ -3614,6 +3581,44 @@ namespace Beefy.widgets
             mSelection.ValueRef.mEndPos = mSelection.ValueRef.mStartPos = (int32)textPos;
         }
 
+		public void SelectWord()
+		{
+			// Select word
+			StartSelection();
+
+			int cursorTextPos = CursorTextPos;
+			int textPos = cursorTextPos;
+
+			if (mData.mTextLength == 0)
+			{   
+			    //Nothing
+			}
+			else if ((textPos < mData.mTextLength) && (!IsNonBreakingChar((char8)mData.mText[textPos].mChar)))
+			{                
+				if ((char8)mData.mText[textPos].mChar == '\n')
+					return;
+			    mSelection.ValueRef.mEndPos++;
+			}
+			else
+			{
+			    while ((textPos > 0) && (IsNonBreakingChar((char8)mData.mText[textPos - 1].mChar)))
+			    {
+			        mSelection.ValueRef.mStartPos--;
+			        textPos--;
+			    }
+
+			    textPos = cursorTextPos + 1;
+			    while ((textPos <= mData.mTextLength) && ((textPos == mData.mTextLength) || (mData.mText[textPos - 1].mChar != '\n')) &&
+			        (IsNonBreakingChar((char8)mData.mText[textPos - 1].mChar)))
+			    {
+			        mSelection.ValueRef.mEndPos++;
+			        textPos++;
+			    }
+			}
+
+			CursorTextPos = mSelection.Value.MaxPos;
+		}
+
         public void SelectToCursor()
         {
             /*int textPos;
@@ -4353,7 +4358,10 @@ namespace Beefy.widgets
 			SetPrimaryTextCursor();
 
 			if (!HasSelection())
+			{
+				SelectWord();
 				return;
+			}
 
 			mJustInsertedCharPair = false;
 			mCursorImplicitlyMoved = false;
