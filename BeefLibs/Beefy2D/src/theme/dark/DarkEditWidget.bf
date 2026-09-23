@@ -621,7 +621,7 @@ namespace Beefy.theme.dark
 			    {
 					float cursorY = y + textYOffset;
 					float cursorHeight = fontLineSpacing;
-					float cursorWidth = Math.Max(1.0f, GS!(1));
+					float cursorWidth = Math.Max(1.0f, GS!(2));
 
 					if ((sDebugMultiCursor) && (mTextCursors.Count > 1))
 					{
