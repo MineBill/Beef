@@ -12,14 +12,14 @@ using res;
 namespace Beefy.gfx
 {
     public enum FontOverflowMode
-    {            
+    {
         Overflow,
         Clip,
         Truncate,
         Wrap,
         Ellipsis
     }
-																													  
+
     public enum FontAlign
     {
         Left = -1,
@@ -147,11 +147,30 @@ namespace Beefy.gfx
 		static extern FTGlyph* FTFont_AllocGlyphGuarded(FTFont* ftFont, int32 char8Code, bool allowDefault, int32 guard);
 
 		[CallingConvention(.Stdcall), CLink]
+		static extern FTGlyph* FTFont_AllocGlyphGuardedSubpixel(FTFont* ftFont, int32 char8Code, bool allowDefault, int32 guard);
+
+		[CallingConvention(.Stdcall), CLink]
 		static extern int32 FTFont_GetKerning(FTFont* font, int32 char8CodeA, int32 char8CodeB);
+
+		// Asks FreeType for a font file's real family/style names (see the C++ side). Returns the face count,
+		// or 0 when the file can't be opened.
+		[CallingConvention(.Stdcall), CLink]
+		static extern int32 FTFont_GetFaceInfo(char8* fileName, int32 faceIndex, char8* outFamilyName, int32 familyNameBufSize,
+			char8* outStyleName, int32 styleNameBufSize, int32* outFlags, int32* outWeight);
 
 		static Dictionary<String, String> sFontNameMap ~ DeleteDictionaryAndKeysAndValues!(_);
 		static Dictionary<String, String> sFontFailMap ~ DeleteDictionaryAndKeysAndValues!(_);
 		static Monitor sMonitor = new .() ~ delete _;
+
+		// Whether newly-loaded fonts rasterize with subpixel (LCD/RGB) antialiasing. The display's subpixel
+		// order is only assumed on Windows; elsewhere the safe default is grayscale. Set before loading (eg
+		// from an editor setting). A font still falls back to grayscale per-draw when its text is scaled or
+		// rotated, where the RGB-stripe assumption doesn't hold.
+#if BF_PLATFORM_WINDOWS
+		public static bool sSubpixel = true;
+#else
+		public static bool sSubpixel = false;
+#endif
 
 		struct FTFont
 		{
@@ -177,6 +196,11 @@ namespace Beefy.gfx
         public class CharData
         {
             public Image mImageSegment ~ delete _;
+			// The subpixel (LCD/RGB) variant of mImageSegment, present only when the owning font is subpixel.
+			// Drawn only for axis-aligned, unscaled text, and positioned with mXOffsetSubpixel/mYOffsetSubpixel
+			// (LCD adds filter margin, so its extents/bearing differ from the grayscale image). Deliberately
+			// not carried by the copy constructor: font effects always render through the grayscale image.
+			public Image mImageSegmentSubpixel ~ delete _;
             public int32 mX;
             public int32 mY;
             public int32 mWidth;
@@ -184,6 +208,11 @@ namespace Beefy.gfx
             public int32 mXOffset;
             public int32 mYOffset;
             public int32 mXAdvance;
+			// Bitmap bearings for the subpixel image. LCD rasterization adds ~1px of filter margin per side
+			// and shifts the bitmap's left bearing to match, so the subpixel image must be positioned with
+			// these rather than mXOffset/mYOffset (the advances are identical, so only the ink offset differs).
+			public int32 mXOffsetSubpixel;
+			public int32 mYOffsetSubpixel;
 			public bool mIsCombiningMark;
 			// The guard requested for mImageSegment and anything made from it (Font.mGlyphGuard). Kept even for an
 			// empty glyph: its effect image still has texels to guard.
@@ -204,6 +233,8 @@ namespace Beefy.gfx
 				mXOffset = copyFrom.mXOffset;
 				mYOffset = copyFrom.mYOffset;
 				mXAdvance = copyFrom.mXAdvance;
+				mXOffsetSubpixel = copyFrom.mXOffsetSubpixel;
+				mYOffsetSubpixel = copyFrom.mYOffsetSubpixel;
 				mIsCombiningMark = copyFrom.mIsCombiningMark;
 				mGuard = copyFrom.mGuard;
 			}
@@ -225,6 +256,20 @@ namespace Beefy.gfx
 		{
 			public float mTop;
 			public float mBottom;
+		}
+
+		// One font face discovered while building the name cache: its real family/style (from the font itself,
+		// via FreeType, or from fontconfig on Linux), the path to load it (with "@index" for a collection face),
+		// and a style rank so the regular face can win a plain family lookup.
+		class FontFaceInfo
+		{
+			public String mFamily ~ delete _;
+			public String mStyle ~ delete _;
+			// Alias the OS reports for this face (Windows registry value name), which may spell the style
+			// differently than the font does (eg registry "Cascadia Mono Regular" vs face style "Roman").
+			public String mDisplayName ~ delete _;
+			public String mPath ~ delete _;
+			public bool mRegular;
 		}
 
 		public class BitmapPage
@@ -254,12 +299,14 @@ namespace Beefy.gfx
 		List<AltFont> mAlternates;
 		MarkRefData mMarkRefData ~ delete _;
 		float[] mLoKerningTable;
-		//BitmapFont mBMFont ~ delete _; 
+		//BitmapFont mBMFont ~ delete _;
 		public StringView mEllipsis = "...";
 		// Empty texels kept around each glyph in its page, so a filtered (scaled or rotated) draw never samples a
 		// neighbour. 1 covers bilinear filtering, except minified draws into a multisampled target, whose edge
 		// pixels sample up to half a pixel outside the quad. Set by Load, before any glyph exists.
 		int32 mGlyphGuard;
+		// Captured from Font.sSubpixel at Load; fonts loaded from a .fnt bitmap atlas stay grayscale.
+		public bool mSubpixel;
 
 		List<FontEffect> mFontEffectStack ~ delete _;
 		DisposeProxy mFontEffectDisposeProxy = new .(new () => { PopFontEffect(); }) ~ delete _;
@@ -286,7 +333,7 @@ namespace Beefy.gfx
 							return .Ignore;
 						}
 					}
-					
+
 					return .ContinueFailure;
 				});
 			}
@@ -301,7 +348,7 @@ namespace Beefy.gfx
 		{
 			public c_int nfont;
 			public c_int sfont;
-			public FcPattern** fonts; 
+			public FcPattern** fonts;
 		}
 
 		enum FcResult : c_int
@@ -318,6 +365,7 @@ namespace Beefy.gfx
 		const String FC_WEIGHT = "weight";
 		const String FC_SLANT = "slant";
 		const String FC_FILE = "file";
+		const String FC_INDEX = "index";
 
 		[CLink, Import(FONTCONFIG_LIB)]
 		static extern c_int FcInit();
@@ -374,11 +422,100 @@ namespace Beefy.gfx
 			mFontEffectStack.PopBack();
 		}
 
+		// Resolves a font path value (which may be a bare file name under the Windows fonts folder) into an
+		// absolute path, appended to outPath.
+		static void ResolveFontPath(StringView fontPath, String outPath)
+		{
+#if BF_PLATFORM_WINDOWS
+			if (!fontPath.Contains(':'))
+			{
+				char8[256] windowsDir;
+				Windows.GetWindowsDirectoryA(&windowsDir, 256);
+				outPath.Append(&windowsDir);
+				outPath.Append(@"\Fonts\");
+			}
+#endif
+			outPath.Append(fontPath);
+		}
+
+		static void AddFontNameKey(StringView key, StringView value)
+		{
+			if (key.IsEmpty)
+				return;
+
+			String upperKey = scope String(key);
+			upperKey.ToUpper();
+			if (sFontNameMap.TryAdd(upperKey, var keyPtr, var valuePtr))
+			{
+				*keyPtr = new String(upperKey);
+				*valuePtr = new String(value);
+			}
+		}
+
+		// Records one face for the name cache. FreeType supplies the face's real family and style so a lookup
+		// matches by family the way a browser does, instead of requiring the OS's exact display name.
+		static void AddFontFaceInfo(List<FontFaceInfo> faceInfos, StringView fontPath, int32 faceIndex, StringView displayName)
+		{
+			FontFaceInfo info = new FontFaceInfo();
+			info.mPath = new String();
+			ResolveFontPath(fontPath, info.mPath);
+			if (faceIndex > 0)
+				info.mPath.AppendF("@{}", faceIndex);
+			if (!displayName.IsEmpty)
+				info.mDisplayName = new String(displayName);
+
+			char8[512] familyBuf;
+			char8[512] styleBuf;
+			int32 flags = 0;
+			int32 weight = 400;
+			int32 faceCount = FTFont_GetFaceInfo(info.mPath, faceIndex, &familyBuf, 512, &styleBuf, 512, &flags, &weight);
+			if (faceCount > 0)
+			{
+				info.mFamily = new String(&familyBuf);
+				info.mStyle = new String(&styleBuf);
+				info.mRegular = (((flags & 1) == 0) && ((flags & 2) == 0) && (weight >= 350) && (weight <= 450));
+			}
+			else if (!displayName.IsEmpty)
+			{
+				// The file couldn't be opened; fall back to the OS display name as the family.
+				info.mFamily = new String(displayName);
+				info.mStyle = new String();
+				info.mRegular = true;
+			}
+			else
+			{
+				delete info;
+				return;
+			}
+
+			faceInfos.Add(info);
+		}
+
+		// Fills sFontNameMap with each face's family, "family style" and OS display name. A regular face claims
+		// the bare family key first, so eg "Arial" resolves to Arial Regular rather than Arial Bold.
+		static void PopulateFontNameMap(List<FontFaceInfo> faceInfos)
+		{
+			for (let face in faceInfos)
+				if (face.mRegular)
+					AddFontNameKey(face.mFamily, face.mPath);
+			for (let face in faceInfos)
+				AddFontNameKey(face.mFamily, face.mPath);
+			for (let face in faceInfos)
+				if ((face.mStyle != null) && (!face.mStyle.IsEmpty))
+					AddFontNameKey(scope $"{face.mFamily} {face.mStyle}", face.mPath);
+			for (let face in faceInfos)
+				if (face.mDisplayName != null)
+					AddFontNameKey(face.mDisplayName, face.mPath);
+		}
+
 		static void BuildFontNameCache()
 		{
 			using (sMonitor.Enter())
 			{
 				sFontNameMap = new .();
+
+				var faceInfos = scope List<FontFaceInfo>();
+				defer { ClearAndDeleteItems(faceInfos); }
 
 #if BF_PLATFORM_WINDOWS
 
@@ -414,33 +551,29 @@ namespace Beefy.gfx
 					{
 						if (valType == 1)
 						{
-							String fontName = scope String(&fontNameArr);
-							int parenPos = fontName.IndexOf(" (");
+							String displayName = scope String(&fontNameArr);
+							int parenPos = displayName.IndexOf(" (");
 							if (parenPos != -1)
-								fontName.RemoveToEnd(parenPos);
-							fontName.ToUpper();
+								displayName.RemoveToEnd(parenPos);
 							String fontPath = scope String(&data);
-							if ((!fontPath.EndsWith(".TTF", .OrdinalIgnoreCase)) && (!fontPath.EndsWith(".TTC", .OrdinalIgnoreCase)))
+							if ((!fontPath.EndsWith(".TTF", .OrdinalIgnoreCase)) && (!fontPath.EndsWith(".TTC", .OrdinalIgnoreCase)) &&
+								(!fontPath.EndsWith(".OTF", .OrdinalIgnoreCase)))
 								continue;
 
-							if (fontName.Contains('&'))
+							if (displayName.Contains('&'))
 							{
-								int collectionIdx = 0;
-								for (var namePart in fontName.Split('&', .RemoveEmptyEntries))
+								// A TrueType collection: each "A & B" name is a face, in file order.
+								int32 collectionIdx = 0;
+								for (var namePart in displayName.Split('&', .RemoveEmptyEntries))
 								{
 									namePart.Trim();
-									if (sFontNameMap.TryAddAlt(namePart, var keyPtr, var valuePtr))
-									{
-										*keyPtr = new String(namePart);
-										*valuePtr = new $"{fontPath}@{collectionIdx}";
-										collectionIdx++;
-									}
+									AddFontFaceInfo(faceInfos, fontPath, collectionIdx, namePart);
+									collectionIdx++;
 								}
 							}
-							else if (sFontNameMap.TryAdd(fontName, var keyPtr, var valuePtr))
+							else
 							{
-								*keyPtr = new String(fontName);
-								*valuePtr = new String(fontPath);
+								AddFontFaceInfo(faceInfos, fontPath, 0, displayName);
 							}
 						}
 					}
@@ -464,7 +597,7 @@ namespace Beefy.gfx
 
 				let pattern = FcPatternCreate();
 				defer FcPatternDestroy(pattern);
-				let objectset = FcObjectSetBuild(FC_FAMILY, FC_STYLE, FC_WEIGHT, FC_SLANT, FC_FILE, null);
+				let objectset = FcObjectSetBuild(FC_FAMILY, FC_STYLE, FC_WEIGHT, FC_SLANT, FC_FILE, FC_INDEX, null);
 				defer FcObjectSetDestroy(objectset);
 
 				let fontSet = FcFontList(null, pattern, objectset);
@@ -478,53 +611,34 @@ namespace Beefy.gfx
 
 					char8* pFile = null;
 					if (FcPatternGetString(font, FC_FILE, 0, &pFile) != .Match)
-					{
 						continue;
-					}
 
 					char8* pFamily = null;
 					if (FcPatternGetString(font, FC_FAMILY, 0, &pFamily) != .Match)
-					{
 						continue;
-					}
 
 					char8* pStyle = null;
 					FcPatternGetString(font, FC_STYLE, 0, &pStyle);
 					c_int weight = 0;
-					let isRegular = (FcPatternGetInteger(font, FC_WEIGHT, 0, &weight) == .Match) && (weight == 80);
+					bool hasWeight = FcPatternGetInteger(font, FC_WEIGHT, 0, &weight) == .Match;
 					c_int slant = 0;
-					let isRoman = (FcPatternGetInteger(font, FC_SLANT, 0, &slant) == .Match) && (slant == 0);
+					bool hasSlant = FcPatternGetInteger(font, FC_SLANT, 0, &slant) == .Match;
+					c_int index = 0;
+					FcPatternGetInteger(font, FC_INDEX, 0, &index);
 
-					let filepath = StringView(pFile);
-					let familyName = StringView(pFamily);
-					
-					String fontName = scope .(48);
-					fontName.Append(familyName);
-					if (pStyle != null)
-					{
-						if (isRegular && isRoman)
-						{
-							fontName.ToUpper();
-
-							if (sFontNameMap.TryAdd(fontName, let pKey, let pVal))
-							{
-								(*pKey) = new String(fontName);
-								(*pVal) = new String(filepath);
-							}
-						}
-
-						fontName..Append(' ').Append(pStyle);
-					}	
-
-					fontName.ToUpper();
-
-					if (sFontNameMap.TryAdd(fontName, let pKey, let pVal))
-					{
-						(*pKey) = new String(fontName);
-						(*pVal) = new String(filepath);
-					}
-				}	 
+					FontFaceInfo info = new FontFaceInfo();
+					info.mFamily = new String(StringView(pFamily));
+					info.mStyle = (pStyle != null) ? new String(StringView(pStyle)) : new String();
+					info.mPath = new String(StringView(pFile));
+					if (index > 0)
+						info.mPath.AppendF("@{}", index);
+					// fontconfig weights: 80 = regular, 200 = bold; slant 0 = roman.
+					info.mRegular = hasWeight && hasSlant && (weight == 80) && (slant == 0);
+					faceInfos.Add(info);
+				}
 #endif
+
+				PopulateFontNameMap(faceInfos);
 			}
 		}
 
@@ -628,9 +742,9 @@ namespace Beefy.gfx
 			mAlternates.Add(altFontEntry);
 			return .Ok;
 		}
-		
+
         public bool GetVal(String outVal, List<String> cmds, String find)
-        {            
+        {
             for (String cmd in cmds)
             {
                 if (cmd.StartsWith(find) && (cmd[find.Length] == '='))
@@ -701,23 +815,26 @@ namespace Beefy.gfx
 				{
 					if (sFontNameMap == null)
 						BuildFontNameCache();
-					String pathStr;
-					let lookupStr = scope String(fontName)..ToUpper();
-					if (sFontNameMap.TryGetValue(lookupStr, out pathStr))
-					{
-#if BF_PLATFORM_WINDOWS
-						if (!pathStr.Contains(':'))
-						{
-							char8[256] windowsDir;
-							Windows.GetWindowsDirectoryA(&windowsDir, 256);
-							path.Append(&windowsDir);
-							path.Append(@"\Fonts\");
-						}
-#endif
 
-						path.Append(pathStr);
+					let lookupStr = scope String(fontName)..ToUpper();
+					String pathStr = null;
+					if (!sFontNameMap.TryGetValue(lookupStr, out pathStr))
+					{
+						// Tolerate a redundant trailing style: "Foo Regular" should still find "Foo".
+						if (lookupStr.EndsWith(" REGULAR", .Ordinal))
+						{
+							let trimmedStr = scope String(lookupStr);
+							trimmedStr.RemoveFromEnd(" REGULAR".Length);
+							sFontNameMap.TryGetValue(trimmedStr, out pathStr);
+						}
+					}
+
+					if (pathStr != null)
+					{
+						ResolveFontPath(pathStr, path);
 						return;
 					}
+
 					if ((sFontFailMap != null) && (sFontFailMap.TryGetValue(lookupStr, out pathStr)))
 					{
 						StringView lastPath = pathStr;
@@ -743,6 +860,7 @@ namespace Beefy.gfx
         {
 			Dispose();
 			mGlyphGuard = glyphGuard;
+			mSubpixel = false;
 
 			mCharData = new Dictionary<char32, CharData>();
 			mLowCharData = new CharData[LOW_CHAR_COUNT];
@@ -806,7 +924,7 @@ namespace Beefy.gfx
 							page.mImage = Image.LoadFromFile(imagePath);
 							mBitmapPages.Add(page);
 						}
-						
+
 						if (line.StartsWith("char "))
 						{
 							CharData charData = null;
@@ -852,7 +970,8 @@ namespace Beefy.gfx
 			mFTFont = FTFont_Load(fontPath, usePointSize);
 			if (mFTFont == null)
 				return false;
-			
+
+			mSubpixel = sSubpixel;
 			CalcKerning();
             return true;
         }
@@ -981,6 +1100,34 @@ namespace Beefy.gfx
 					charData.mImageSegment.mHeight = ftGlyph.mHeight;
 					charData.mImageSegment.mSrcWidth = ftGlyph.mWidth;
 					charData.mImageSegment.mSrcHeight = ftGlyph.mHeight;
+
+					if (mSubpixel)
+					{
+						// Same glyph rasterized with LCD/RGB antialiasing, into the same page. Drawn instead of
+						// the grayscale image when the text is axis-aligned and unscaled (see Draw).
+						var ftGlyphSubpixel = FTFont_AllocGlyphGuardedSubpixel(ftFont, (int32)checkChar, fontIdx == mAlternates.Count - 1, mGlyphGuard);
+						if (ftGlyphSubpixel != null)
+						{
+							charData.mImageSegmentSubpixel = new Image();
+							charData.mImageSegmentSubpixel.mNativeTextureSegment = ftGlyphSubpixel.mTextureSegment;
+							charData.mImageSegmentSubpixel.mX = ftGlyphSubpixel.mX;
+							charData.mImageSegmentSubpixel.mY = ftGlyphSubpixel.mY;
+							charData.mImageSegmentSubpixel.mWidth = ftGlyphSubpixel.mWidth;
+							charData.mImageSegmentSubpixel.mHeight = ftGlyphSubpixel.mHeight;
+							charData.mImageSegmentSubpixel.mSrcWidth = ftGlyphSubpixel.mWidth;
+							charData.mImageSegmentSubpixel.mSrcHeight = ftGlyphSubpixel.mHeight;
+							charData.mXOffsetSubpixel = ftGlyphSubpixel.mXOffset;
+							charData.mYOffsetSubpixel = ftGlyphSubpixel.mYOffset;
+						}
+						else
+						{
+							// This face can't produce LCD glyphs. Drop the font to grayscale so no draw ever
+							// pairs a grayscale texel with the LCD shader. Already-cached subpixel images just
+							// go unused.
+							mSubpixel = false;
+						}
+					}
+
 					charData.mIsCombiningMark = ((checkChar >= '\u{0300}') && (checkChar <= '\u{036F}')) || ((checkChar >= '\u{1DC0}') && (checkChar <= '\u{1DFF}'));
 					if (charData.mIsCombiningMark)
 						charData.mXAdvance = 0;
@@ -1160,6 +1307,44 @@ namespace Beefy.gfx
 		    }
 		}
 
+		// Whether the graphics matrix leaves glyphs on the pixel grid with no scale or rotation -- the only
+		// case where RGB subpixel coverage lines up with the display's subpixels.
+		static bool IsSubpixelMatrix(Matrix matrix)
+		{
+			return (matrix.a == 1.0f) && (matrix.b == 0.0f) && (matrix.c == 0.0f) && (matrix.d == 1.0f);
+		}
+
+		// Per-mode glyph geometry. The grayscale and subpixel rasters of a glyph share an advance but not
+		// necessarily their bitmap bearing/extent (LCD adds filter margin), so each draw uses the values that
+		// match the image it actually draws.
+		static int32 GetCharXOffset(CharData charData, bool subpixel)
+		{
+			if ((subpixel) && (charData.mImageSegmentSubpixel != null))
+				return charData.mXOffsetSubpixel;
+			return charData.mXOffset;
+		}
+
+		static int32 GetCharYOffset(CharData charData, bool subpixel)
+		{
+			if ((subpixel) && (charData.mImageSegmentSubpixel != null))
+				return charData.mYOffsetSubpixel;
+			return charData.mYOffset;
+		}
+
+		static int32 GetCharWidth(CharData charData, bool subpixel)
+		{
+			if ((subpixel) && (charData.mImageSegmentSubpixel != null))
+				return (int32)charData.mImageSegmentSubpixel.mWidth;
+			return charData.mWidth;
+		}
+
+		static int32 GetCharHeight(CharData charData, bool subpixel)
+		{
+			if ((subpixel) && (charData.mImageSegmentSubpixel != null))
+				return (int32)charData.mImageSegmentSubpixel.mHeight;
+			return charData.mHeight;
+		}
+
         public void Draw(Graphics g, float x, float y, StringView theString, FontMetrics* fontMetrics = null)
         {
             float curX = x;
@@ -1172,17 +1357,21 @@ namespace Beefy.gfx
 			uint32 color = g.mColor;
 
 			bool usingTextRenderState = mFontEffectStack?.IsEmpty != false;
+			// Subpixel antialiasing assumes the glyph lands on whole pixels with the display's RGB stripes
+			// horizontal, so it's only used when the graphics matrix is unscaled and unrotated. Effects
+			// (outlines) render through the grayscale image too.
+			bool useSubpixel = usingTextRenderState && mSubpixel && IsSubpixelMatrix(g.mMatrix);
 
 			if (usingTextRenderState)
-				g.PushTextRenderState();
+				g.PushTextRenderState(useSubpixel);
 
 			float markTopOfs = 0;
 			float markBotOfs = 0;
 
 			CharData lastCharData = null;
 			float lastCharX = 0;
-            char32 prevChar = (char32)0;			
-            
+            char32 prevChar = (char32)0;
+
 			for (var c in theString.DecodedChars)
             {
 				int idx = @c.NextIndex;
@@ -1206,39 +1395,45 @@ namespace Beefy.gfx
                 CharData charData = GetCharData(c);
 				if (charData == null)
 					continue;
-				float drawX = curX + charData.mXOffset;
-				float drawY = curY + charData.mYOffset;
-				
+				int32 charWidth = GetCharWidth(charData, useSubpixel);
+				int32 charHeight = GetCharHeight(charData, useSubpixel);
+				float drawX = curX + GetCharXOffset(charData, useSubpixel);
+				float drawY = curY + GetCharYOffset(charData, useSubpixel);
+
 				if ((charData.mIsCombiningMark) && (lastCharData != null))
 				{
 					var markRefData = GetMarkRefData();
 					var markPos = GetMarkPosition(c);
+					int32 lastXOffset = GetCharXOffset(lastCharData, useSubpixel);
+					int32 lastYOffset = GetCharYOffset(lastCharData, useSubpixel);
+					int32 lastWidth = GetCharWidth(lastCharData, useSubpixel);
+					int32 lastHeight = GetCharHeight(lastCharData, useSubpixel);
 
 					if (markPos == .TopR)
 					{
-						drawX = lastCharX + lastCharData.mXOffset + lastCharData.mWidth - charData.mWidth / 2;
-						drawY = curY + lastCharData.mYOffset - charData.mHeight / 2;
+						drawX = lastCharX + lastXOffset + lastWidth - charWidth / 2;
+						drawY = curY + lastYOffset - charHeight / 2;
 					}
 					else if ((markPos == .AboveE) || (markPos == .OverE))
 					{
-						drawX = lastCharX + lastCharData.mXOffset + lastCharData.mWidth - charData.mWidth / 2;
+						drawX = lastCharX + lastXOffset + lastWidth - charWidth / 2;
 					}
 					else
 					{
-						drawX = lastCharX + lastCharData.mXOffset + (lastCharData.mWidth / 2);
+						drawX = lastCharX + lastXOffset + (lastWidth / 2);
 						if ((markPos == .AboveC) || (markPos == .BelowC) || (markPos == .OverC))
-							drawX -= charData.mWidth / 2;
+							drawX -= charWidth / 2;
 					}
 
 					if ((markPos == .AboveC) || (markPos == .AboveR))
 					{
-                        drawY += lastCharData.mYOffset - markRefData.mTop - markTopOfs;
-						markTopOfs += charData.mHeight;
+                        drawY += lastYOffset - markRefData.mTop - markTopOfs;
+						markTopOfs += charHeight;
 					}
 					else if ((markPos == .BelowC) || (markPos == .BelowR))
 					{
-						drawY += (lastCharData.mYOffset + lastCharData.mHeight) - markRefData.mBottom + markBotOfs;
-						markBotOfs += charData.mHeight;
+						drawY += (lastYOffset + lastHeight) - markRefData.mBottom + markBotOfs;
+						markBotOfs += charHeight;
 					}
 				}
 				else
@@ -1260,7 +1455,7 @@ namespace Beefy.gfx
 				bool isFullyClipped = false;
 				if (hasClipRect)
 				{
-					if (newMatrix.tx < clipRect.mX -charData.mImageSegment.mWidth)
+					if (newMatrix.tx < clipRect.mX - charWidth)
 					{
 						isFullyClipped = true;
 					}
@@ -1272,8 +1467,12 @@ namespace Beefy.gfx
 					}
 				}
 
+				Image charImage = charData.mImageSegment;
+				if (useSubpixel && (charData.mImageSegmentSubpixel != null))
+					charImage = charData.mImageSegmentSubpixel;
+
 				if (!isFullyClipped)
-                    charData.mImageSegment.Draw(newMatrix, g.ZDepth, color);
+                    charImage.Draw(newMatrix, g.ZDepth, color);
 
                 curX += charData.mXAdvance;
 
@@ -1302,7 +1501,7 @@ namespace Beefy.gfx
 				{
 					tempStr.Clear();
 					tempStr.Append(workingStr);
-				}	
+				}
 			}
 
             while (true)
@@ -1310,7 +1509,7 @@ namespace Beefy.gfx
                 int32 crPos = (int32)workingStr.IndexOf('\n');
                 if (crPos == -1)
                     break;
-				
+
                 float sectionHeight = Draw(g, StringView(workingStr, 0, crPos), useX, useY, justification, width, stringEndMode, fontMetrics);
                 drawHeight += sectionHeight;
                 useY += sectionHeight;
@@ -1331,7 +1530,7 @@ namespace Beefy.gfx
                         float ellipsisLen = GetWidth(mEllipsis);
                         if (width < ellipsisLen)
                             return 0; // Don't draw at all if we don't even have enough space for the ellipsis
-                        
+
 						int strLen = GetCharCountToLength(workingStr, width - ellipsisLen);
 						tempStr = scope:: String(Math.Min(strLen, 128));
 						tempStr.Append(theString, 0, strLen);
@@ -1378,7 +1577,7 @@ namespace Beefy.gfx
                                 fontMetrics.mLineCount++;
 
                             drawHeight += Draw(g, StringView(workingStr, 0, checkIdx), useX, useY, justification, width, .Truncate, fontMetrics);
-                            useY += GetLineSpacing();                            
+                            useY += GetLineSpacing();
                             workingStr.Adjust(checkIdx);
                         }
                     }
@@ -1403,7 +1602,7 @@ namespace Beefy.gfx
             {
 				Draw(g, useX, useY, workingStr, fontMetrics);
             }
-            
+
             if (fontMetrics != null)
                 fontMetrics.mMaxWidth = Math.Max(fontMetrics.mMaxWidth, GetWidth(workingStr));
             drawHeight += GetLineSpacing();

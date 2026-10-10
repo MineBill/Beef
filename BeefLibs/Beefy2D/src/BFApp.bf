@@ -680,6 +680,8 @@ namespace Beefy
 			String filePath = scope String();
 			filePath.Append(mInstallDir, "shaders/Std");
 
+			Console.WriteLine($"mColorMatrix: {mColorMatrix}");
+
 			if (mColorMatrix != null)
 				filePath.Append("_hue");
 
@@ -693,6 +695,15 @@ namespace Beefy
 			filePath.Append("_font");
 			Shader textShader = Shader.CreateFromFile(filePath, DefaultVertex.sVertexDefinition);
 			mGraphics.mTextShader = textShader;
+
+			// Subpixel variant. Skipped in hue mode (which has no LCD font shader). If the shader file is
+			// absent this stays null and text falls back to the grayscale shader (see PushTextRenderState).
+			if (mColorMatrix == null)
+			{
+				String textLcdFilePath = scope String(filePath);
+				textLcdFilePath.Append("_lcd");
+				mGraphics.mTextShaderLcd = Shader.CreateFromFile(textLcdFilePath, DefaultVertex.sVertexDefinition);
+			}
 			//shader.SetTechnique("Standard");            
 			//mGraphics.mDefaultShader = textShader;
 			//mGraphics.mDefaultRenderState = RenderState.Create();

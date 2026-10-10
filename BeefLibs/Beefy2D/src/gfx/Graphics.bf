@@ -44,6 +44,9 @@ namespace Beefy.gfx
 
         public Shader mDefaultShader ~ delete _;
 		public Shader mTextShader ~ delete _;
+		// Subpixel (LCD/RGB) variant of mTextShader. Null when unavailable (eg hue mode), in which case text
+		// falls back to the grayscale shader.
+		public Shader mTextShaderLcd ~ delete _;
         public RenderState mDefaultRenderState ~ delete _;
         public Font mFont;
         public Image mWhiteDot ~ delete _;
@@ -425,9 +428,10 @@ namespace Beefy.gfx
 			return mRenderStateDisposeProxy;
 		}
 
-		public void PushTextRenderState()
+		public void PushTextRenderState(bool subpixel = false)
 		{
-			var textRenderState = AllocRenderState(mTextShader, mClipRect, mTexWrap);
+			Shader shader = ((subpixel) && (mTextShaderLcd != null)) ? mTextShaderLcd : mTextShader;
+			var textRenderState = AllocRenderState(shader, mClipRect, mTexWrap);
 			//textRenderState.ClipRect = mClipRect;
 			//textRenderState.Shader = mTextShader;
 			PushRenderState(textRenderState);

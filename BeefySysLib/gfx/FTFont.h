@@ -9,6 +9,8 @@
 
 #include "third_party/freetype/include/ft2build.h"
 #include FT_FREETYPE_H
+#include FT_LCD_FILTER_H
+#include FT_TRUETYPE_TABLES_H
 
 NS_BF_BEGIN
 
@@ -131,7 +133,10 @@ public:
 	
 	bool Load(const StringImpl& file, float pointSize);	
 
-	FTFontManager::Glyph* AllocGlyph(int charCode, bool allowDefault, int guard = 0);
+	// subpixel: render with FreeType's LCD (RGB) antialiasing and pack the three subpixel coverage
+	// channels into one texel, so a pixel is still one texel. Callers pick grayscale (false) for text
+	// drawn scaled or rotated, where the RGB-stripe assumption doesn't hold.
+	FTFontManager::Glyph* AllocGlyph(int charCode, bool allowDefault, int guard = 0, bool subpixel = false);
 	int GetKerning(int charA, int charB);
 
 	void Release(bool cacheRetain = false);

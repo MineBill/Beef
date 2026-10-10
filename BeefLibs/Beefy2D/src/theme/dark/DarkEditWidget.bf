@@ -584,8 +584,13 @@ namespace Beefy.theme.dark
 					float totalLineWidth = mEditWidget.mScrollContentContainer.mWidth - thickness;
 
 					float hiliteX = (int)mEditWidget.mHorzPos.v; // If we don't round to int we get jitter while scrolling.
+					// Center the frame on the text line rather than hanging its border below it. The caret is
+					// centered in the line, and when the line-height scale is below 1 it can be taller than the
+					// line box, so grow to cover whichever is taller.
+					float lineCenterY = y + textYOffset + fontLineSpacing * 0.5f;
+					float hiliteHeight = Math.Max(lineSpacing, fontLineSpacing) + thickness;
 					using (g.PushColor(DarkTheme.COLOR_CURRENT_LINE_HILITE))
-						g.OutlineRect(hiliteX, y, totalLineWidth, lineSpacing + thickness, thickness);
+						g.OutlineRect(hiliteX, lineCenterY - hiliteHeight * 0.5f, totalLineWidth, hiliteHeight, thickness);
 				}
 
 				float blinkRate = 1 / 9.0f;

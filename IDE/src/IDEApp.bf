@@ -14053,6 +14053,9 @@ namespace IDE
 
 		void RehupScale()
 		{
+			// Must be set before any font is (re)loaded below; picks up the editor setting.
+			Font.sSubpixel = mSettings.mEditorSettings.mSubpixelFonts;
+
 			if (mInitialized)
 				Font.ClearCache();
 

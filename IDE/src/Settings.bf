@@ -722,6 +722,13 @@ namespace IDE
 
 			public List<String> mFonts = new .() ~ DeleteContainerAndItems!(_);
 			public float mFontSize = 12;
+			// Subpixel (LCD/RGB) antialiasing. Only Windows's default subpixel order is assumed; elsewhere
+			// grayscale is the safe default.
+#if BF_PLATFORM_WINDOWS
+			public bool mSubpixelFonts = true;
+#else
+			public bool mSubpixelFonts = false;
+#endif
 			public float mLineHeightScale = 1.0f;
 			public AutoCompleteShowKind mAutoCompleteShowKind = .PanelIfVisible;
 			public bool mAutoCompleteRequireControl = true;
@@ -757,6 +764,7 @@ namespace IDE
 						sd.Add(str);
 				}
 				sd.Add("FontSize", mFontSize);
+				sd.Add("SubpixelFonts", mSubpixelFonts);
 				sd.Add("LineHeightScale", mLineHeightScale);
 				sd.Add("AutoCompleteShowKind", mAutoCompleteShowKind);
 				sd.Add("AutoCompleteRequireControl", mAutoCompleteRequireControl);
@@ -794,6 +802,7 @@ namespace IDE
 				}
 				sd.Get("UIScale", ref gApp.mSettings.mUISettings.mScale); // Legacy
 				sd.Get("FontSize", ref mFontSize);
+				sd.Get("SubpixelFonts", ref mSubpixelFonts);
 				sd.Get("LineHeightScale", ref mLineHeightScale);
 				sd.Get("AutoCompleteShowKind", ref mAutoCompleteShowKind);
 				sd.Get("AutoCompleteRequireControl", ref mAutoCompleteRequireControl);
@@ -832,6 +841,9 @@ namespace IDE
 			public void Apply()
 			{
 				mTabSize = Math.Clamp(mTabSize, 1, 16);
+
+				// Keep the font subsystem's flag in sync even if a re-hup is skipped.
+				Font.sSubpixel = mSubpixelFonts;
 
 				if (mSpellCheckEnabled)
 				{
