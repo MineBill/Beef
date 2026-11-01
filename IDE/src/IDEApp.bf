@@ -6560,13 +6560,8 @@ namespace IDE
 			MenuInfo rootInfo = scope .();
 			CreateMenu_Populate(rootInfo);
 
-			SysMenu root;
-#if BF_PLATFORM_WINDOWS
-			root = mMainWindow.mSysMenu;
-#else
-			root = mMainFrame.mMenuBar.mSysMenuRoot;
+			SysMenu root = mMainFrame.mMenuBar.mSysMenuRoot;
 			defer mMainFrame.RehupSize();
-#endif
 
 			CreateMenu_Children(rootInfo, root);
 		}
@@ -9109,7 +9104,6 @@ namespace IDE
 				evt.mHandled = true;
 			}
 
-#if !BF_PLATFORM_WINDOWS
 			if (evt.mKeyFlags.HeldKeys == .Alt)
 			{
 				for (var btn in mMainFrame.mMenuBar.mButtons)
@@ -9121,7 +9115,6 @@ namespace IDE
 					}
 				}
 			}
-#endif
 		}
 
 		void SysKeyUp(KeyCode keyCode)
@@ -13799,8 +13792,8 @@ namespace IDE
 
 			//
 			{
-				BFWindow.Flags flags = .Border | .ThickFrame | .Resizable | .SysMenu |
-					.Caption | .Minimize | .Maximize | .QuitOnClose | .Menu | .PopupPosition | .AcceptFiles;
+				BFWindow.Flags flags = .ThickFrame | .SysMenu | .Caption | .Minimize | .Maximize |
+					.QuitOnClose | .PopupPosition | .AcceptFiles | .ClientDecorations | .NoLayered;
 				// Automated runs come up behind whatever the user is working in: shown without
 				// activation, and not maximized, since a maximized placement activates regardless.
 				bool background = (mRunningTestScript) || (mMCPPort >= 0);
@@ -13835,6 +13828,7 @@ namespace IDE
 			UpdateTitle();
 			mMainWindow.SetMinimumSize(GS!(480), GS!(360));
 			mMainWindow.mIsMainWindow = true;
+			mMainWindow.SetWindowBorderColor(Color.Lerp(DarkTheme.COLOR_BKG, Color.White, 0.12f));
 			mMainWindow.mOnMouseUp.Add(new => MouseUp);
 			mMainWindow.mOnWindowKeyDown.Add(new => SysKeyDown);
 			mMainWindow.mOnWindowKeyUp.Add(new => SysKeyUp);

@@ -222,11 +222,7 @@ namespace IDE
 
 		static SysMenu GetMenuRoot()
 		{
-#if BF_PLATFORM_WINDOWS
-			return gApp.mMainWindow?.mSysMenu;
-#else
 			return gApp.[Friend]mMainFrame.mMenuBar.mSysMenuRoot;
-#endif
 		}
 
 		static void GetMenuLabel(SysMenu menu, String outLabel)

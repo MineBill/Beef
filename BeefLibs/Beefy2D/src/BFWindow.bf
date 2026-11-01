@@ -56,6 +56,8 @@ namespace Beefy
             LogicalCoords = 0x1'0000'0000,
 			// Skips the layered window style. Not for windows that use SetAlpha, SetMouseVisible or Menu
 			NoLayered = 0x2'0000'0000,
+			// Draw the title bar and window controls ourselves instead of the native caption/menu.
+			ClientDecorations = 0x4'0000'0000,
         };
 
 		[AllowDuplicates]
@@ -315,6 +317,12 @@ namespace Beefy
 
 		[CallingConvention(.Stdcall), CLink]
 		static extern bool BFWindow_IsBorderlessFullscreen(void* window);
+
+		[CallingConvention(.Stdcall), CLink]
+		static extern void BFWindow_BeginDrag(void* window);
+
+		[CallingConvention(.Stdcall), CLink]
+		static extern void BFWindow_SetWindowBorderColor(void* window, uint32 color);
 
         [CallingConvention(.Stdcall), CLink]
         static extern void* BFWindow_AddMenuItem(void* window, void* parent, int32 insertIdx, char8* text, char8* hotKey, void* bitmap, int32 enabled, int32 checkState, int32 radioCheck);
@@ -722,6 +730,21 @@ namespace Beefy
 		{
 			get => BFWindow_IsBorderlessFullscreen(mNativeWindow);
 			set => BFWindow_SetBorderlessFullscreen(mNativeWindow, value);
+		}
+
+		// Starts an OS-level window move from the client area, as if the caption were being dragged.
+		// Used with the ClientDecorations flag for a custom-drawn title bar; keeps Aero snap and the
+		// native move loop identical to a real title bar drag.
+		public void BeginDrag()
+		{
+			BFWindow_BeginDrag(mNativeWindow);
+		}
+
+		// Sets the border color of a client-decorated window (see the ClientDecorations flag).
+		// The color is ARGB (0xAARRGGBB).
+		public void SetWindowBorderColor(uint32 color)
+		{
+			BFWindow_SetWindowBorderColor(mNativeWindow, color);
 		}
 
         public virtual void* AddMenuItem(void* parent, int insertIdx, String text, String hotKey, void* bitmap, bool enabled, int checkState, bool radioCheck)

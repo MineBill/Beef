@@ -18,9 +18,28 @@
 #include <dwmapi.h>
 #pragma comment(lib, "dwmapi.lib")
 
+// Windows 11 DWM attributes for rounded corners / border color; not present in older SDKs.
+#ifndef DWMWA_WINDOW_CORNER_PREFERENCE
+#define DWMWA_WINDOW_CORNER_PREFERENCE 33
+#endif
+#ifndef DWMWA_BORDER_COLOR
+#define DWMWA_BORDER_COLOR 34
+#endif
+#ifndef DWMWA_TRANSITIONS_FORCEDISABLED
+#define DWMWA_TRANSITIONS_FORCEDISABLED 3
+#endif
+#ifndef DWMWCP_ROUND
+#define DWMWCP_ROUND 2
+#endif
+
 #include "util/AllocDebug.h"
 
 USING_NS_BF;
+
+// Posted when a window is shown from inside a message handler (see WinBFWindow::Show). Deferring
+// lets the WM_GETMINMAXINFO/WM_SIZE that ShowWindow generates run in the normal loop, where the
+// reentrancy guard in WindowProc doesn't drop them.
+#define BFWM_DEFERRED_SHOW (WM_APP + 1)
 
 int Beefy::WinBFMenu::mMenuCount = 0;
 
@@ -234,6 +253,17 @@ WinBFWindow::WinBFWindow(BFWindow* parent, const StringImpl& title, int x, int y
 	if (((windowFlagsEx & WS_EX_LAYERED) != 0) && ((windowFlags & BFWINDOW_ALPHA_MASK) == 0))
 		SetLayeredWindowAttributes(mHWnd, 0, 255, 0);
 
+	if (windowFlags & BFWINDOW_CLIENT_DECORATIONS)
+	{
+		// Rounded corners (Windows 11; ignored on older versions).
+		DWORD cornerPreference = DWMWCP_ROUND;
+		::DwmSetWindowAttribute(mHWnd, DWMWA_WINDOW_CORNER_PREFERENCE, &cornerPreference, sizeof(cornerPreference));
+
+		// Keep the native maximize/restore transition enabled so the window animates.
+		BOOL transitionsDisabled = FALSE;
+		::DwmSetWindowAttribute(mHWnd, DWMWA_TRANSITIONS_FORCEDISABLED, &transitionsDisabled, sizeof(transitionsDisabled));
+	}
+
 	HWND relativeWindow = NULL;
 	if ((windowFlags & BFWINDOW_TOPMOST) && (parent == NULL))
 		relativeWindow = HWND_TOP;
@@ -293,6 +323,17 @@ WinBFWindow::WinBFWindow(BFWindow* parent, const StringImpl& title, int x, int y
 	gBFApp->mRenderDevice->AddRenderWindow(mRenderWindow);
 
 	SetWindowLongPtr(mHWnd, GWLP_USERDATA, (LONG_PTR)this);
+
+	if (windowFlags & BFWINDOW_CLIENT_DECORATIONS)
+	{
+		// The non-client area was computed before GWLP_USERDATA pointed at us (so WM_NCCALCSIZE
+		// fell through to DefWindowProc and kept the caption). Recompute it now that our
+		// WindowProc is live so the native caption never shows.
+		::SetWindowPos(mHWnd, NULL, 0, 0, 0, 0,
+			SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+		// The client area just grew by the caption/border size; resync the swapchain.
+		mRenderWindow->Resized();
+	}
 
 	mIsMenuKeyHandled = false;
 	mAlphaMaskBitmap = NULL;
@@ -396,6 +437,17 @@ static int ToWShow(BFWindow::ShowKind showKind)
 
 void WinBFWindow::Show(ShowKind showKind)
 {
+	WinBFApp* app = (WinBFApp*) gBFApp;
+	if ((app != NULL) && (app->mInMsgProc))
+	{
+		// Reached from inside a message handler (e.g. a custom title bar button). Calling
+		// ShowWindow here would make WindowProc's reentrancy guard drop the WM_GETMINMAXINFO and
+		// WM_SIZE it generates, so a maximize would cover the taskbar and never resize the
+		// swapchain. Defer it to the normal message loop instead.
+		::PostMessage(mHWnd, BFWM_DEFERRED_SHOW, (WPARAM)showKind, 0);
+		return;
+	}
+
 	::ShowWindow(mHWnd, ToWShow(showKind));
 }
 
@@ -564,6 +616,12 @@ LRESULT WinBFWindow::WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 	switch (uMsg)
 	{
+	case BFWM_DEFERRED_SHOW:
+		// Deferred from WinBFWindow::Show when it was reached inside a message handler. We run it
+		// here, outside the mInMsgProc guard below, so the WM_GETMINMAXINFO/WM_SIZE that ShowWindow
+		// generates are handled normally instead of being dropped by the reentrancy guard.
+		::ShowWindow(mHWnd, ToWShow((ShowKind)wParam));
+		break;
 	case WM_CLOSE:
 		{
 			//OutputDebugStrF("WM_CLOSE %08X NewFocus:%08X\n", hWnd, GetFocus());
@@ -664,6 +722,27 @@ LRESULT WinBFWindow::WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 		case WM_DISPLAYCHANGE:
 			((DXRenderWindow*)mRenderWindow)->mRefreshRate = 0;
 			break;
+		case WM_NCCALCSIZE:
+			// For a client-decorated window we draw the title bar ourselves. When restored the
+			// client fills the whole window (no non-client area, no unpainted border); when
+			// maximized we keep the (off-screen) border and only reclaim the caption, so the client
+			// lands exactly on the work area without clipping.
+			if ((mFlags & BFWINDOW_CLIENT_DECORATIONS) && (wParam == TRUE))
+			{
+				if (::IsZoomed(mHWnd))
+				{
+					NCCALCSIZE_PARAMS* params = (NCCALCSIZE_PARAMS*)lParam;
+					RECT windowRect = params->rgrc[0];
+					::DefWindowProc(hWnd, WM_NCCALCSIZE, wParam, lParam);
+					// Reclaim the caption: the bottom border equals the top border height, so use it
+					// to place the client's top edge just below the (off-screen) top border.
+					int borderY = windowRect.bottom - params->rgrc[0].bottom;
+					params->rgrc[0].top = windowRect.top + borderY;
+				}
+				result = 0;
+				doResult = true;
+			}
+			break;
 		case WM_SIZE:
 			mRenderWindow->Resized();			
 			if ((mMovedFunc != NULL) && (wParam != SIZE_MINIMIZED))
@@ -679,6 +758,29 @@ LRESULT WinBFWindow::WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 				int y = (short)HIWORD(lParam);
 
 				result = mHitTestFunc(this, x, y);
+				if ((result == -3) && (mFlags & BFWINDOW_CLIENT_DECORATIONS) && (!::IsZoomed(mHWnd)))
+				{
+					// Frameless window: emulate the resize borders the OS would otherwise provide.
+					// The client decorations hit test claims the title bar as HTCAPTION; everything
+					// else falls through here, so we only claim the outer edges.
+					RECT windowRect;
+					::GetWindowRect(mHWnd, &windowRect);
+
+					int borderSize = (int)(6.0f * GetDPI() / 96.0f);
+					bool isLeft = (x - windowRect.left) < borderSize;
+					bool isRight = (x >= windowRect.right - borderSize);
+					bool isTop = (y - windowRect.top) < borderSize;
+					bool isBottom = (y >= windowRect.bottom - borderSize);
+
+					if (isTop && isLeft) result = HTTOPLEFT;
+					else if (isTop && isRight) result = HTTOPRIGHT;
+					else if (isBottom && isLeft) result = HTBOTTOMLEFT;
+					else if (isBottom && isRight) result = HTBOTTOMRIGHT;
+					else if (isTop) result = HTTOP;
+					else if (isBottom) result = HTBOTTOM;
+					else if (isLeft) result = HTLEFT;
+					else if (isRight) result = HTRIGHT;
+				}
 				doResult = (result != -3);
 			}
 			break;
@@ -2052,6 +2154,22 @@ void WinBFWindow::SetBorderlessFullscreen(bool fullscreen)
 		PinCursorToCenter();
 }
 
+void WinBFWindow::BeginWindowDrag()
+{
+	// Emulate dragging the (removed) caption so the OS runs its native move loop -- this keeps
+	// Aero snap, monitor edge behavior and the move cursor all consistent with a real title bar.
+	// ReleaseCapture first: our WM_LBUTTONDOWN handler has already SetCapture'd this window.
+	::ReleaseCapture();
+	::SendMessage(mHWnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+}
+
+void WinBFWindow::SetWindowBorderColor(uint32 color)
+{
+	// DWMWA_BORDER_COLOR takes a COLORREF (0x00BBGGRR); we receive ARGB (0xAARRGGBB).
+	COLORREF colorRef = RGB((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF);
+	::DwmSetWindowAttribute(mHWnd, DWMWA_BORDER_COLOR, &colorRef, sizeof(colorRef));
+}
+
 // Called on genuine focus-gain (WM_SETFOCUS or the WM_TIMER-based foreground poller, see WindowProc) --
 // retries StartRelativeMouseMode if something still wants relative mode but couldn't fully establish it
 // yet (see StartRelativeMouseMode's own foreground check).
@@ -2310,6 +2428,10 @@ BFMenu* WinBFWindow::AddMenuItem(BFMenu* parent, int insertIdx, const char* text
 
 void WinBFWindow::ModifyMenuItem(BFMenu* item, const char* text, const char* hotKey, BFSysBitmap* sysBitmap, bool enabled, int checkState, bool radioCheck)
 {
+	// A client-drawn (non-native) menu has no native item; ignore these.
+	if (item == NULL)
+		return;
+
 	UTF16String lText;
 	if (text != NULL)
 		lText = UTF8Decode(text);
@@ -2378,6 +2500,10 @@ void WinBFWindow::ModifyMenuItem(BFMenu* item, const char* text, const char* hot
 
 void WinBFWindow::RemoveMenuItem(BFMenu* item)
 {
+	// A client-drawn (non-native) menu has no native item; ignore these.
+	if (item == NULL)
+		return;
+
 	WinBFMenu* aMenu = (WinBFMenu*) item;
 	WinBFMenu* parentMenu = (WinBFMenu*) item->mParent;
 

@@ -104,6 +104,8 @@ public:
 	virtual bool			IsInRelativeMouseMode() override;
 	virtual void			SetBorderlessFullscreen(bool fullscreen) override;
 	virtual bool			IsBorderlessFullscreen() override { return mBorderlessFullscreen; }
+	virtual void			BeginWindowDrag() override;
+	virtual void			SetWindowBorderColor(uint32 color) override;
 	virtual int				GetDPI() override; // { return ::GetDpiForWindow(mHWnd); }
 	virtual bool			CaptureClientBits(uint32* outBits, int width, int height) override;
 

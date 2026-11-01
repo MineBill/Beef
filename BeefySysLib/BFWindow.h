@@ -64,7 +64,8 @@ enum : int64
 	BFWINDOW_NO_MOUSE       = 0x40000000,
 	BFWINDOW_TOOLTIP        = 0x80000000,
 	BFWINDOW_LOGICAL_COORDS	= 0x100000000,
-	BFWINDOW_NO_LAYERED		= 0x200000000
+	BFWINDOW_NO_LAYERED		= 0x200000000,
+	BFWINDOW_CLIENT_DECORATIONS = 0x400000000
 };
 
 class RenderWindow;
@@ -179,6 +180,13 @@ public:
 	// mode. Leaving restores the previous placement.
 	virtual void			SetBorderlessFullscreen(bool fullscreen) {}
 	virtual bool			IsBorderlessFullscreen() { return false; }
+	// Starts an OS-level window move from the client area, as if the caption were being dragged.
+	// Used by custom client-side window decorations (see BFWINDOW_CLIENT_DECORATIONS) so that
+	// moving, Aero snap and the native move loop behave exactly like a real title bar drag.
+	virtual void			BeginWindowDrag() {}
+	// Sets the border color of a client-decorated window (see BFWINDOW_CLIENT_DECORATIONS).
+	// The color is ARGB (0xAARRGGBB); no-op on platforms/windows that don't support it.
+	virtual void			SetWindowBorderColor(uint32 color) {}
 	virtual void			LostFocus(BFWindow* newFocus) = 0;
 	virtual int				GetDPI() { return 0; }
 	virtual bool			CaptureClientBits(uint32* outBits, int width, int height) { return false; }

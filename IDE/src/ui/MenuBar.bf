@@ -174,12 +174,124 @@ public class MenuBar : Widget
 	}
 
 
+	public enum WindowButtonKind
+	{
+		Minimize,
+		MaximizeRestore,
+		Close
+	}
+
+	public class WindowButton : Widget
+	{
+		public WindowButtonKind mKind;
+
+		public this(WindowButtonKind kind)
+		{
+			mKind = kind;
+		}
+
+		bool IsMaximized
+		{
+			get
+			{
+				var window = mWidgetWindow;
+				if (window == null)
+					return false;
+				return (window.mShowKind == .Maximized) || (window.mShowKind == .ShowMaximized);
+			}
+		}
+
+		public override void Draw(Graphics g)
+		{
+			bool active = (mWidgetWindow != null) && (mWidgetWindow.mHasFocus);
+			bool isClose = mKind == .Close;
+
+			if ((mMouseOver) || (mMouseDown))
+			{
+				if (isClose)
+				{
+					using (g.PushColor(mMouseDown ? 0xFFC1121F : 0xFFE81123))
+						g.FillRect(0, 0, mWidth, mHeight);
+				}
+				else
+				{
+					using (g.PushColor(mMouseDown ? 0x40FFFFFF : 0x20FFFFFF))
+						g.FillRect(0, 0, mWidth, mHeight);
+				}
+			}
+
+			uint32 glyphColor = (isClose && (mMouseOver || mMouseDown)) ? Color.White : (active ? 0xFFE0E0E0 : 0xFF909090);
+
+			float cx = mWidth / 2;
+			float cy = mHeight / 2;
+
+			using (g.PushColor(glyphColor))
+			{
+				switch (mKind)
+				{
+				case .Minimize:
+					g.DrawLine(cx - GS!(5), cy + GS!(3), cx + GS!(5), cy + GS!(3), GS!(1));
+				case .MaximizeRestore:
+					if (IsMaximized)
+					{
+						// Restore: two overlapping squares
+						g.OutlineRect(cx - GS!(7), cy - GS!(3), GS!(8), GS!(8), GS!(1));
+						g.OutlineRect(cx - GS!(3), cy - GS!(7), GS!(8), GS!(8), GS!(1));
+					}
+					else
+					{
+						g.OutlineRect(cx - GS!(5), cy - GS!(5), GS!(10), GS!(10), GS!(1));
+					}
+				case .Close:
+					g.DrawLine(cx - GS!(5), cy - GS!(5), cx + GS!(5), cy + GS!(5), GS!(1));
+					g.DrawLine(cx - GS!(5), cy + GS!(5), cx + GS!(5), cy - GS!(5), GS!(1));
+				}
+			}
+		}
+	}
+
+
 	public append List<Button> mButtons = .(8);
 	public UISysMenuRoot mSysMenuRoot = new .() ~ delete _;
+	public List<WindowButton> mWindowButtons = new .() ~ delete _;
+	bool mHitTestAdded;
+	String mLastTitle ~ delete _;
 
 	public this()
 	{
 		mSysMenuRoot.mRootMenuBar = this;
+
+		var minimizeButton = new WindowButton(.Minimize);
+		minimizeButton.mOnMouseClick.Add(new (evt) => { mWidgetWindow.Show(.Minimized); });
+		AddWidget(minimizeButton);
+		mWindowButtons.Add(minimizeButton);
+
+		var maximizeButton = new WindowButton(.MaximizeRestore);
+		maximizeButton.mOnMouseClick.Add(new (evt) =>
+			{
+				if ((mWidgetWindow.mShowKind == .Maximized) || (mWidgetWindow.mShowKind == .ShowMaximized))
+					mWidgetWindow.Show(.Normal);
+				else
+					mWidgetWindow.Show(.Maximized);
+			});
+		AddWidget(maximizeButton);
+		mWindowButtons.Add(maximizeButton);
+
+		var closeButton = new WindowButton(.Close);
+		closeButton.mOnMouseClick.Add(new (evt) => { mWidgetWindow.Close(); });
+		AddWidget(closeButton);
+		mWindowButtons.Add(closeButton);
+	}
+
+	public override void AddedToWindow()
+	{
+		base.AddedToWindow();
+
+		if ((!mHitTestAdded) && (mWidgetWindow.mWindowFlags.HasFlag(.ClientDecorations)))
+		{
+			mWidgetWindow.mOnHitTest.Add(new => HitTest);
+			mHitTestAdded = true;
+		}
 	}
 
 	public override void InitChildren()
@@ -269,6 +381,15 @@ public class MenuBar : Widget
 			btn.Resize(offset, 0, width, mHeight);
 			offset += width;
 		}
+
+		// Window controls (minimize / maximize-restore / close) on the right
+		float btnWidth = GS!(46);
+		int32 buttonCount = (int32)mWindowButtons.Count;
+		for (int32 i = 0; i < buttonCount; i++)
+		{
+			float x = mWidth - btnWidth * (buttonCount - i);
+			mWindowButtons[i].Resize(x, 0, btnWidth, mHeight);
+		}
 	}
 
 	public override void Resize(float x, float y, float width, float height)
@@ -277,11 +398,69 @@ public class MenuBar : Widget
 		ResizeComponents();
 	}
 
+	BFWindowBase.HitTestResult HitTest(int32 x, int32 y)
+	{
+		let window = mWidgetWindow;
+		if (window == null)
+			return .NotHandled;
+
+		float lx = x - window.mClientX - mX;
+		float ly = y - window.mClientY - mY;
+
+		if ((lx >= 0) && (lx < mWidth) && (ly >= 0) && (ly < mHeight))
+		{
+			// Menu buttons and window controls are interactive; everything else in the strip
+			// acts as the caption so the OS drags / double-click-maximizes natively.
+			for (let btn in mButtons)
+				if ((lx >= btn.mX) && (lx < btn.mX + btn.mWidth) && (ly >= btn.mY) && (ly < btn.mY + btn.mHeight))
+					return .NotHandled;
+			for (let windowButton in mWindowButtons)
+				if ((lx >= windowButton.mX) && (lx < windowButton.mX + windowButton.mWidth) && (ly >= windowButton.mY) && (ly < windowButton.mY + windowButton.mHeight))
+					return .NotHandled;
+
+			return .Caption;
+		}
+
+		return .NotHandled;
+	}
+
+	public override void Update()
+	{
+		base.Update();
+
+		// The title text is only updated through SetTitle, which doesn't mark us dirty, so track it
+		if ((mLastTitle == null) || (mLastTitle != mWidgetWindow.mTitle))
+		{
+			String.NewOrSet!(mLastTitle, mWidgetWindow.mTitle);
+			MarkDirty();
+		}
+	}
+
 	public override void Draw(Graphics g)
 	{
 		using (g.PushColor(DarkTheme.COLOR_BKG))
 		{
 			g.FillRect(0, 0, mWidth, mHeight);
+		}
+
+		// Window title, centered in the space the menu buttons and window controls don't use
+		let title = mWidgetWindow.mTitle;
+		if (!String.IsNullOrEmpty(title))
+		{
+			float rightInset = mWindowButtons.Count * GS!(46);
+			float leftInset = 0;
+			for (let btn in mButtons)
+				leftInset = Math.Max(leftInset, btn.mX + btn.mWidth);
+			leftInset += GS!(8);
+
+			float titleWidth = mWidth - leftInset - rightInset - GS!(8);
+			if (titleWidth > GS!(20))
+			{
+				g.SetFont(DarkTheme.sDarkTheme.mSmallFont);
+				uint32 titleColor = mWidgetWindow.mHasFocus ? 0xFFB8B8B8 : 0xFF707070;
+				using (g.PushColor(titleColor))
+					g.DrawString(title, leftInset, (mHeight - GS!(20)) / 2, .Centered, titleWidth, .Ellipsis);
+			}
 		}
 	}
 }

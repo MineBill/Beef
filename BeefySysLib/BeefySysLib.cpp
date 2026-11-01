@@ -488,6 +488,16 @@ BF_EXPORT bool BF_CALLTYPE BFWindow_IsBorderlessFullscreen(BFWindow* window)
 	return window->IsBorderlessFullscreen();
 }
 
+BF_EXPORT void BF_CALLTYPE BFWindow_BeginDrag(BFWindow* window)
+{
+	window->BeginWindowDrag();
+}
+
+BF_EXPORT void BF_CALLTYPE BFWindow_SetWindowBorderColor(BFWindow* window, uint32 color)
+{
+	window->SetWindowBorderColor(color);
+}
+
 BF_EXPORT void BF_CALLTYPE BFWindow_SetClientPosition(BFWindow* window, int x, int y)
 {
 	window->SetClientPosition(x, y);

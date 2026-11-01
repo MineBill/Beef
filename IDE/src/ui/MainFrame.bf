@@ -14,10 +14,7 @@ namespace IDE.ui
     {
         public StatusBar mStatusBar;
         public DarkDockingFrame mDockingFrame;
-
-#if !BF_PLATFORM_WINDOWS
-		public MenuBar mMenuBar;
-#endif
+        public MenuBar mMenuBar;
 
         public this()
         {
@@ -25,38 +22,32 @@ namespace IDE.ui
             AddWidget(mStatusBar);
             mDockingFrame = (DarkDockingFrame)ThemeFactory.mDefault.CreateDockingFrame();
             AddWidget(mDockingFrame);
-#if !BF_PLATFORM_WINDOWS
-			mMenuBar = new MenuBar();
-			AddWidget(mMenuBar);
-#endif
+            mMenuBar = new MenuBar();
+            AddWidget(mMenuBar);
         }
 
-		public void Reset()
-		{
-			mDockingFrame.RemoveSelf();
-			gApp.DeferDelete(mDockingFrame);
-			mDockingFrame = (DarkDockingFrame)ThemeFactory.mDefault.CreateDockingFrame();
+        public void Reset()
+        {
+            mDockingFrame.RemoveSelf();
+            gApp.DeferDelete(mDockingFrame);
+            mDockingFrame = (DarkDockingFrame)ThemeFactory.mDefault.CreateDockingFrame();
             AddWidget(mDockingFrame);
 
-			RehupSize();
-		}
+            RehupSize();
+        }
 
-		public ~this()
-		{
-		}
+        public ~this()
+        {
+        }
 
         public override void Resize(float x, float y, float width, float height)
         {
             base.Resize(x, y, width, height);
 
-			int32 statusHeight = GS!(20);
-#if !BF_PLATFORM_WINDOWS
-			int32 menuHeight = GS!(20);
-			mDockingFrame.Resize(0, menuHeight, width, height - statusHeight - menuHeight);
-			mMenuBar.Resize(0, 0, width, menuHeight);
-#else
-            mDockingFrame.Resize(0, 0, width, height - statusHeight);
-#endif
+            int32 statusHeight = GS!(20);
+            int32 menuHeight = GS!(24);
+            mDockingFrame.Resize(0, menuHeight, width, height - statusHeight - menuHeight);
+            mMenuBar.Resize(0, 0, width, menuHeight);
             mStatusBar.Resize(0, mHeight - statusHeight, width, statusHeight);
         }
     }
