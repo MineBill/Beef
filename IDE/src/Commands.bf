@@ -322,6 +322,7 @@ namespace IDE
 			Add("Show Breakpoints", new => gApp.ShowBreakpoints);
 			Add("Show Call Stack", new => gApp.ShowCallstack);
 			Add("Show Class View", new => gApp.ShowClassViewPanel);
+			Add("Show Command Palette", new => gApp.ShowCommandPalette);
 			Add("Show Current", new => gApp.Cmd_ShowCurrent);
 			Add("Show Diagnostics", new => gApp.ShowDiagnostics);
 			Add("Show Disassembly", new => gApp.ShowDisassemblyAtStack);

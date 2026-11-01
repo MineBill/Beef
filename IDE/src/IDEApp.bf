@@ -206,6 +206,8 @@ namespace IDE
 
 		public WidgetWindow mPopupWindow;
 		public RecentFileSelector mRecentFileSelector;
+		// The open command palette, if any. Cleared when its popup window closes.
+		public CommandPalette mCommandPalette;
 
 		public IDETabbedView mActiveDocumentsTabbedView;
 		public static new IDEApp sApp;
@@ -5473,6 +5475,12 @@ namespace IDE
 		}
 
 		[IDECommand]
+		public void ShowCommandPalette()
+		{
+			CommandPalette.Show();
+		}
+
+		[IDECommand]
 		public void ShowClassViewPanel()
 		{
 			ShowPanel(mClassViewPanel, "Class View");
@@ -6355,6 +6363,8 @@ namespace IDE
 			//////////
 
 			subMenu = root.AddMenuItem("&View");
+			subMenu.AddMenuItem("Command &Palette", "Show Command Palette");
+			subMenu.AddMenuItem(null);
 			subMenu.AddMenuItem("AutoComplet&e", "Show Autocomplete Panel");
 			subMenu.AddMenuItem("&Auto Watches", "Show Auto Watches");
 			subMenu.AddMenuItem("Boo&kmarks", "Show Bookmarks");

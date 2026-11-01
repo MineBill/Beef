@@ -399,6 +399,7 @@ namespace IDE
 				GetColor("WorkspaceFailedText", ref mWorkspaceFailedText);
 				GetColor("WorkspaceManualIncludeText", ref mWorkspaceManualIncludeText);
 				GetColor("WorkspaceIgnoredText", ref mWorkspaceIgnoredText);
+				GetColor("WorkspaceCutText", ref mWorkspaceCutText);
 				GetColor("CurrentLineHilite", ref mCurrentLineHilite);
 
 				GetColor("Code", ref mCode);
@@ -966,6 +967,7 @@ namespace IDE
 				Add("Show Breakpoints", "Ctrl+Alt+B");
 				Add("Show Call Stack", "Ctrl+Alt+C");
 				Add("Show Class View", "Ctrl+Alt+L");
+				Add("Show Command Palette", "Ctrl+Shift+P");
 				Add("Show Current", "Alt+C");
 				Add("Show Errors", "Ctrl+Alt+R");
 				Add("Show Diagnostics", "Ctrl+Alt+D");
