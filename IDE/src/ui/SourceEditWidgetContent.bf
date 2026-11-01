@@ -4731,7 +4731,7 @@ namespace IDE.ui
 		                    }
 		                    mAutoComplete.mAutoCompleteListWidget.SelectDirection(moveDir);
 		                }
-		                else if (mAutoComplete.mInvokeWidget != null)
+		                else if ((mAutoComplete.mInvokeWidget != null) && (altDown))
 		                {
 							// Close the list if we had !wantListCursors
 		                    if (mAutoComplete.mInvokeWidget.SelectDirection(((keyCode == KeyCode.Up) || (keyCode == KeyCode.PageUp)) ? -1 : 1))
@@ -4740,7 +4740,8 @@ namespace IDE.ui
 								mAutoComplete?.Update();
 							}
 		                }
-						return;
+						if ((wantListCursors) || ((mAutoComplete.mInvokeWidget != null) && (altDown)))
+						    return;
 		            }
 				}
 
