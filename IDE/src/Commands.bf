@@ -244,9 +244,7 @@ namespace IDE
 			Add("Collapse Toggle", new => gApp.[Friend]CollapseToggle);
 			Add("Collapse Toggle All", new => gApp.[Friend]CollapseToggleAll);
 			Add("Collapse Undo", new => gApp.[Friend]CollapseUndo);
-			Add("Comment Block", new => gApp.[Friend]CommentBlock, .Editor);
-			Add("Comment Lines", new => gApp.[Friend]CommentLines, .Editor);
-			Add("Comment Toggle", new => gApp.[Friend]CommentToggle, .Editor);
+			Add("Comment Toggle", new => gApp.[Friend]ToggleComment, .Editor);
 			Add("Compile File", new => gApp.Cmd_CompileFile);
 			Add("Debug All Tests", new () => { gApp.[Friend]RunTests(true, true); });
 			Add("Debug Comptime", new => gApp.DebugComptime);
@@ -354,7 +352,6 @@ namespace IDE
 			Add("Tab Last", new => gApp.[Friend]TabLast);
 			Add("Tab Next", new => gApp.[Friend]TabNext);
 			Add("Tab Prev", new => gApp.[Friend]TabPrev);
-			Add("Uncomment Selection", new => gApp.[Friend]UncommentSelection);
 			Add("View New", new => gApp.Cmd_ViewNew);
 			Add("View Split", new => gApp.[Friend]ViewSplit);
 			Add("View White Space", new => gApp.Cmd_ViewWhiteSpace);

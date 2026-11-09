@@ -2846,38 +2846,6 @@ namespace IDE
 		}
 
 		[IDECommand]
-		void CommentBlock()
-		{
-			var sewc = GetActiveSourceEditWidgetContent();
-			if (sewc != null)
-				sewc.CommentBlock();
-		}
-
-		[IDECommand]
-		void CommentLines()
-		{
-			var sewc = GetActiveSourceEditWidgetContent();
-			if (sewc != null)
-				sewc.CommentLines();
-		}
-
-		[IDECommand]
-		void CommentToggle()
-		{
-			var sewc = GetActiveSourceEditWidgetContent();
-			if (sewc != null)
-				sewc.ToggleComment();
-		}
-
-		[IDECommand]
-		void UncommentSelection()
-		{
-			var sewc = GetActiveSourceEditWidgetContent();
-			if (sewc != null)
-				sewc.ToggleComment(false);
-		}
-
-		[IDECommand]
 		void ComplexIdSpan()
 		{
 			if (var sourceViewPanel = GetLastActiveDocumentPanel() as SourceViewPanel)
@@ -6332,10 +6300,7 @@ namespace IDE
 			advancedEditMenu.AddMenuItem(null);
 			advancedEditMenu.AddMenuItem("Make Uppercase", "Make Uppercase");
 			advancedEditMenu.AddMenuItem("Make Lowercase", "Make Lowercase");
-			advancedEditMenu.AddMenuItem("Comment Block", "Comment Block");
-			advancedEditMenu.AddMenuItem("Comment Lines", "Comment Lines");
 			advancedEditMenu.AddMenuItem("Comment Toggle", "Comment Toggle");
-			advancedEditMenu.AddMenuItem("Uncomment Selection", "Uncomment Selection");
 			advancedEditMenu.AddMenuItem("Reformat Document", "Reformat Document");
 			advancedEditMenu.AddMenuItem("View White Space", "View White Space", null, null, true, mViewWhiteSpace.Bool ? 1 : 0).mOnCreate = new (menu) => { mViewWhiteSpace.mMenu = menu; };
 

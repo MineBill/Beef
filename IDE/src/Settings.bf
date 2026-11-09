@@ -922,8 +922,6 @@ namespace IDE
 				Add("Collapse Toggle All", "Ctrl+M, Ctrl+L");
 				Add("Collapse Undo", "Ctrl+M, Ctrl+Z");
 				Add("Compile File", "Ctrl+F7");
-				Add("Comment Block", "Ctrl+K, Ctrl+C");
-				Add("Comment Lines", "Ctrl+K, Ctrl+/");
 				Add("Comment Toggle", "Ctrl+K, Ctrl+T");
 				Add("Debug Comptime", "Alt+F7");
 				Add("Find", "Alt+Shift+L");
@@ -1004,7 +1002,6 @@ namespace IDE
 				Add("Tab Last", "Ctrl+Alt+End");
 				Add("Tab Next", "Ctrl+Alt+PageDown");
 				Add("Tab Prev", "Ctrl+Alt+PageUp");
-				Add("Uncomment Selection", "Ctrl+K, Ctrl+U");
 				Add("Zoom In", "Ctrl+Equals");
 				Add("Zoom Out", "Ctrl+Minus");
 				Add("Zoom Reset", "Ctrl+0");

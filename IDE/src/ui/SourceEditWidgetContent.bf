@@ -2848,247 +2848,6 @@ namespace IDE.ui
 			return true;
 		}
 
-		public bool CommentBlock()
-		{
-			if (CheckReadOnly())
-				return false;
-
-			for (var cursor in mTextCursors)
-			{
-				SetTextCursor(cursor);
-
-				var startLineAndCol = CursorLineAndColumn;
-				int startTextPos = CursorTextPos;
-				var prevSelection = CurSelection;
-				bool hadSelection = HasSelection();
-
-				if (!HasSelection())
-				{
-					CursorToLineEnd();
-					int cursorEndPos = CursorTextPos;
-					CursorToLineStart(false);
-					CurSelection = EditSelection(CursorTextPos, cursorEndPos);
-				}
-
-				if (HasSelection())
-				{
-					CreateMultiCursorUndoBatch("SEWC.CommentBlock()");
-					var setCursorAction = new SetCursorAction(this);
-					setCursorAction.mSelection = prevSelection;
-					setCursorAction.mCursorTextPos = (int32)startTextPos;
-					mData.mUndoManager.Add(setCursorAction);
-
-					int minPos = CurSelection.GetValueOrDefault().MinPos;
-					int maxPos = CurSelection.GetValueOrDefault().MaxPos;
-					CurSelection = null;
-
-					var str = scope String();
-					ExtractString(minPos, maxPos - minPos, str);
-					
-					var trimmedStr = scope String();
-					trimmedStr.Append(str);
-					int32 startLen = (int32)trimmedStr.Length;
-					trimmedStr.TrimStart();
-					int32 afterTrimStart = (int32)trimmedStr.Length;
-					trimmedStr.TrimEnd();
-					int32 afterTrimEnd = (int32)trimmedStr.Length;
-
-					int firstCharPos = minPos + (startLen - afterTrimStart);
-					int lastCharPos = maxPos - (afterTrimStart - afterTrimEnd);
-
-					CursorTextPos = firstCharPos;
-					InsertAtCursor("/*");
-					CursorTextPos = lastCharPos + 2;
-					InsertAtCursor("*/");
-
-					CurSelection = EditSelection(firstCharPos, lastCharPos + 4);
-
-					if (startTextPos <= minPos)
-						CursorLineAndColumn = startLineAndCol;
-					else if (startTextPos < maxPos)
-						CursorTextPos = startTextPos + 2;
-
-					if (!hadSelection)
-						CurSelection = null;
-				}
-			}
-
-			CloseMultiCursorUndoBatch();
-			SetPrimaryTextCursor();
-
-			return true;
-		}
-
-		public bool CommentLines()
-		{
-			if (CheckReadOnly())
-				return false;
-
-			var sortedCursors = mTextCursors;
-			if (mTextCursors.Count > 1)
-				sortedCursors = GetSortedCursors(.. scope :: List<TextCursor>());
-
-			// Forcing creation of undo batch, because even single cursor has
-			// multiple undo-actions.
-			CreateMultiCursorUndoBatch("SEWC.CommentLines()", force: true);
-
-			for (var cursor in sortedCursors)
-			{
-				SetTextCursor(cursor);
-
-				var startTextPos = CursorTextPos;
-				var prevSelection = CurSelection;
-				var hadSelection = HasSelection();
-				var startLineAndCol = CursorLineAndColumn;
-				if (!HasSelection())
-				{
-					CursorToLineEnd();
-					int cursorEndPos = CursorTextPos;
-					CursorToLineStart(false);
-					CurSelection = .(CursorTextPos, cursorEndPos);
-				}
-
-				var setCursorAction = new SetCursorAction(this);
-				setCursorAction.mSelection = prevSelection;
-				setCursorAction.mCursorTextPos = (int32)startTextPos;
-				mData.mUndoManager.Add(setCursorAction);
-
-				int minPos = CurSelection.Value.MinPos;
-				int maxPos = CurSelection.Value.MaxPos;
-				CurSelection = null;
-
-				while (minPos > 0)
-				{
-					var c = mData.mText[minPos - 1].mChar;
-					if (c == '\n')
-						break;
-					minPos--;
-				}
-
-				bool hadMaxChar = false;
-				int checkMaxPos = maxPos;
-				while (checkMaxPos > 0)
-				{
-					var c = mData.mText[checkMaxPos - 1].mChar;
-					if (c == '\n')
-						break;
-					if ((c != '\t') && (c != ' '))
-					{
-						hadMaxChar = true;
-						break;
-					}
-					checkMaxPos--;
-				}
-
-				if (!hadMaxChar)
-				{
-					checkMaxPos = maxPos;
-					while (checkMaxPos < mData.mTextLength)
-					{
-						var c = mData.mText[checkMaxPos].mChar;
-						if (c == '\n')
-							break;
-						if ((c != '\t') && (c != ' '))
-						{
-							maxPos = checkMaxPos + 1;
-							break;
-						}
-						checkMaxPos++;
-					}
-				}
-
-				int wantLineCol = -1;
-				int lineStartCol = 0;
-				bool didLineComment = false;
-
-				for (int i = minPos; i < maxPos; i++)
-				{
-					var c = mData.mText[i].mChar;
-					if (didLineComment)
-					{
-						if (c == '\n')
-						{
-							didLineComment = false;
-							lineStartCol = 0;
-						}
-						continue;
-					}
-					if (c == '\t')
-						lineStartCol += gApp.mSettings.mEditorSettings.mTabSize;
-					else if (c == ' ')
-						lineStartCol++;
-					else
-					{
-						if (wantLineCol == -1)
-							wantLineCol = lineStartCol;
-						else
-							wantLineCol = Math.Min(wantLineCol, lineStartCol);
-						didLineComment = true;
-					}
-				}
-				wantLineCol = Math.Max(0, wantLineCol);
-
-				didLineComment = false;
-				lineStartCol = 0;
-				int appendedCount = 0;
-				for (int i = minPos; i < maxPos; i++)
-				{
-					var c = mData.mText[i].mChar;
-					if (didLineComment)
-					{
-						if (c == '\n')
-						{
-							didLineComment = false;
-							lineStartCol = 0;
-						}
-						continue;
-					}
-
-					bool commentNow = false;
-					if ((wantLineCol != -1) && (lineStartCol >= wantLineCol))
-						commentNow = true;
-
-					if (c == '\t')
-						lineStartCol += gApp.mSettings.mEditorSettings.mTabSize;
-					else if (c == ' ')
-						lineStartCol++;
-					else
-						commentNow = true;
-
-					if (commentNow)
-					{
-						CursorTextPos = i;
-						String str = scope .();
-						while (lineStartCol + gApp.mSettings.mEditorSettings.mTabSize <= wantLineCol)
-						{
-							lineStartCol += gApp.mSettings.mEditorSettings.mTabSize;
-							str.Append("\t");
-						}
-						str.Append("//");
-						InsertAtCursor(str);
-						didLineComment = true;
-						maxPos += str.Length;
-						if (i <= startTextPos + appendedCount)
-							appendedCount += str.Length;
-					}
-				}
-				CurSelection = EditSelection(minPos, maxPos);
-
-				if (appendedCount > 0)
-					CursorTextPos = startTextPos + appendedCount;
-				else
-					CursorLineAndColumn = startLineAndCol;
-
-				if (!hadSelection)
-					CurSelection = null;
-			}
-
-			CloseMultiCursorUndoBatch();
-			SetPrimaryTextCursor();
-
-			return true;
-		}
-
 		void FixSelection()
 		{
 			if (!HasSelection())
@@ -3102,7 +2861,30 @@ namespace IDE.ui
 			}
 		}	
 
-		public bool ToggleComment(bool? doComment = null)
+		// Returns the text position in the line where "//" should be placed to line up with wantLineCol
+		int GetLineCommentPos(int lineStart, int lineEnd, int wantLineCol)
+		{
+			int tabSize = gApp.mSettings.mEditorSettings.mTabSize;
+			int col = 0;
+			int pos = lineStart;
+			while (pos < lineEnd)
+			{
+				if (col >= wantLineCol)
+					break;
+
+				var c = mData.mText[pos].mChar;
+				if (c == '\t')
+					col += tabSize;
+				else if (c == ' ')
+					col++;
+				else
+					break;
+				pos++;
+			}
+			return pos;
+		}
+
+		public bool ToggleComment()
 		{
 			if (CheckReadOnly())
 				return false;
@@ -3111,162 +2893,154 @@ namespace IDE.ui
 			if (mTextCursors.Count > 1)
 				sortedCursors = GetSortedCursors(.. scope :: List<TextCursor>());
 
-			var didComment = false;
+			// Even a single cursor has multiple undo actions, so force the batch
+			CreateMultiCursorUndoBatch("SEWC.ToggleComment()", force: true);
+
+			bool didComment = false;
+
 			for (var cursor in sortedCursors)
 			{
 				SetTextCursor(cursor);
 
-				int startTextPos = CursorTextPos;
-				bool doLineComment = false;
+				var startTextPos = CursorTextPos;
 				var prevSelection = CurSelection;
-				var cursorAtEndPos = true;
+				var hadSelection = HasSelection();
 
-				LineAndColumn? startLineAndCol = CursorLineAndColumn;
 				if (!HasSelection())
 				{
 					CursorToLineEnd();
 					int cursorEndPos = CursorTextPos;
 					CursorToLineStart(false);
 					CurSelection = EditSelection(CursorTextPos, cursorEndPos);
-					doLineComment = true;
-				}
-				else
-				{
-					cursorAtEndPos = (CurSelection.Value.mStartPos == CurCursorTextPos);
 				}
 
-				if (HasSelection())
+				var setCursorAction = new SetCursorAction(this);
+				setCursorAction.mSelection = prevSelection;
+				setCursorAction.mCursorTextPos = (int32)startTextPos;
+				mData.mUndoManager.Add(setCursorAction);
+
+				int minPos = CurSelection.Value.MinPos;
+				int maxPos = CurSelection.Value.MaxPos;
+				CurSelection = null;
+
+				// Expand the selection to whole lines
+				while (minPos > 0)
 				{
-					CreateMultiCursorUndoBatch("SEWC.ToggleComment()", force: true);
+					var c = mData.mText[minPos - 1].mChar;
+					if (c == '\n')
+						break;
+					minPos--;
+				}
+				while (maxPos < mData.mTextLength)
+				{
+					var c = mData.mText[maxPos].mChar;
+					if (c == '\n')
+						break;
+					maxPos++;
+				}
 
-					var setCursorAction = new SetCursorAction(this);
-					setCursorAction.mSelection = prevSelection;
-					setCursorAction.mCursorTextPos = (int32)startTextPos;
-					mData.mUndoManager.Add(setCursorAction);
+				// Collect the lines and find the column where the comments should line up
+				List<(int lineStart, int lineEnd, int contentStart)> lines = scope .();
+				int tabSize = gApp.mSettings.mEditorSettings.mTabSize;
+				int wantLineCol = -1;
 
-					var minPos = CurSelection.GetValueOrDefault().MinPos;
-					var maxPos = CurSelection.GetValueOrDefault().MaxPos;
-					CurSelection = null;
+				int scanPos = minPos;
+				while (true)
+				{
+					int lineStart = scanPos;
+					int lineEnd = lineStart;
+					while ((lineEnd < maxPos) && (mData.mText[lineEnd].mChar != '\n'))
+						lineEnd++;
 
-					var str = scope String();
-					ExtractString(minPos, (maxPos - minPos), str);
-					var trimmedStr = scope String();
-					trimmedStr.Append(str);
-					int32 startLen = (int32)trimmedStr.Length;
-					trimmedStr.TrimStart();
-					int32 afterTrimStart = (int32)trimmedStr.Length;
-					trimmedStr.TrimEnd();
-					int32 afterTrimEnd = (int32)trimmedStr.Length;
-					trimmedStr.Append('\n');
-
-					int firstCharPos = minPos + (startLen - afterTrimStart);
-					int lastCharPos = maxPos - (afterTrimStart - afterTrimEnd);
-
-					if (afterTrimEnd == 0)
+					int contentStart = lineStart;
+					int col = 0;
+					while ((contentStart < lineEnd) &&
+						((mData.mText[contentStart].mChar == ' ') || (mData.mText[contentStart].mChar == '\t')))
 					{
-						CursorLineAndColumn = startLineAndCol.Value;
+						col += (mData.mText[contentStart].mChar == '\t') ? tabSize : 1;
+						contentStart++;
+					}
 
-						if (doComment == null)
-							CurSelection = null;
+					lines.Add((lineStart, lineEnd, contentStart));
 
-						//return false; // not sure if this should be false in blank/only whitespace selection case
+					if (contentStart < lineEnd)
+					{
+						if ((wantLineCol == -1) || (col < wantLineCol))
+							wantLineCol = col;
+					}
+
+					if (lineEnd >= maxPos)
+						break;
+					scanPos = lineEnd + 1;
+				}
+
+				if (wantLineCol == -1)
+					wantLineCol = 0;
+
+				// Every non-blank line needs a comment at the common column for this to be an uncomment
+				bool allCommented = true;
+				bool anyContentLine = false;
+				for (var line in lines)
+				{
+					if (line.contentStart >= line.lineEnd)
 						continue;
-					}
-					else if ((doComment != true) && (trimmedStr.StartsWith("//")))
-					{
-						didComment = true;
-						for (int i = firstCharPos; i <= lastCharPos; i++)
-						{
-							if (((minPos == 0) && (i == 0)) ||
-								((minPos >= 0) && (SafeGetChar(i - 1) == '\n') || (SafeGetChar(i - 1) == '\t') || (SafeGetChar(i - 1) == ' ')))
-							{
-								if (SafeGetChar(i - 0) == '/' && SafeGetChar(i + 1) == '/')
-								{
-									CurSelection = EditSelection(i - 0, i + 2);
-									DeleteSelection();
-									lastCharPos -= 2;
-									while (i < maxPos && SafeGetChar(i) != '\n')
-									{
-										i++;
-									}
-								}
-							}
-						}
 
-						startLineAndCol = null;
-						CursorToLineEnd();
-						int cursorEndPos = CursorTextPos;
-						CurSelection = .(minPos, cursorEndPos);
-					}
-					else if ((doComment != true) && trimmedStr.StartsWith("/*"))
-					{
-						didComment = true;
-						if (trimmedStr.EndsWith("*/\n"))
-						{
-							CurSelection = EditSelection(firstCharPos, firstCharPos + 2);
-							DeleteChar();
-							CurSelection = EditSelection(lastCharPos - 4, lastCharPos - 2);
-							DeleteChar();
+					anyContentLine = true;
+					int pos = GetLineCommentPos(line.lineStart, line.lineEnd, wantLineCol);
+					bool commented = (pos + 1 < line.lineEnd) &&
+						(mData.mText[pos].mChar == '/') &&
+						(mData.mText[pos + 1].mChar == '/');
+					if (!commented)
+						allCommented = false;
+				}
 
-							if (prevSelection != null)
-								CurSelection = EditSelection(firstCharPos, lastCharPos - 4);
-						}
-					}
-					else if (doComment != false)
-					{
-						didComment = true;
-						//if selection is from beginning of the line then we want to use // comment, that's why the check for line count and ' ' and tab
-						if (doLineComment)
-						{
-							CursorTextPos = minPos;
-							InsertAtCursor("//"); //goes here if no selection
-						}
-						else
-						{
-							CursorTextPos = firstCharPos;
-							InsertAtCursor("/*");
-							CursorTextPos = lastCharPos + 2;
-							InsertAtCursor("*/");
-						}
+				bool doUncomment = anyContentLine && allCommented;
+				int cursorDelta = 0;
 
-						CurSelection = EditSelection(firstCharPos, lastCharPos + 4);
-						if (startTextPos <= minPos)
-							CursorLineAndColumn = startLineAndCol.Value;
-						else
-							CursorTextPos = startTextPos + 2;
-						startLineAndCol = null;
+				// Edit bottom-up so earlier positions stay valid
+				for (int lineIdx = lines.Count - 1; lineIdx >= 0; lineIdx--)
+				{
+					var line = lines[lineIdx];
+					if (line.contentStart >= line.lineEnd)
+						continue;
+
+					int pos = GetLineCommentPos(line.lineStart, line.lineEnd, wantLineCol);
+
+					if (doUncomment)
+					{
+						int removeLen = 2;
+						if ((pos + 2 < line.lineEnd) && (mData.mText[pos + 2].mChar == ' '))
+							removeLen = 3;
+
+						CurSelection = EditSelection(pos, pos + removeLen);
+						DeleteSelection();
+						maxPos -= removeLen;
+						if (pos <= startTextPos)
+							cursorDelta -= removeLen;
 					}
 					else
 					{
-						CurSelection = prevSelection;
+						CursorTextPos = pos;
+						InsertAtCursor("// ");
+						maxPos += 3;
+						if (pos <= startTextPos)
+							cursorDelta += 3;
 					}
 
-					if (startLineAndCol != null)
-						CursorLineAndColumn = startLineAndCol.Value;
-
-					if (prevSelection == null)
-						CurSelection = null;
-
-					ClampCursor();
-					FixSelection();
-
-					if (CurSelection.HasValue)
-					{
-						// Placing cursor where it was before, meaning
-						// at the start or at the end of the selection.
-						CurCursorTextPos = (cursorAtEndPos)
-							? (int32)CurSelection.Value.mStartPos
-							: (int32)CurSelection.Value.mEndPos
-							;
-					}
+					didComment = true;
 				}
 
+				CurSelection = EditSelection(minPos, maxPos);
+				CursorTextPos = startTextPos + cursorDelta;
+
+				if (!hadSelection)
+					CurSelection = null;
 			}
 
 			CloseMultiCursorUndoBatch();
 			SetPrimaryTextCursor();
 
-			return (didComment);
+			return didComment;
 		}
 
 		public void DeleteAllRight()
@@ -4245,11 +4019,6 @@ namespace IDE.ui
 
                 return;
             }
-
-			if ((keyChar == '/') && (HasSelection()) && (ToggleComment()))
-			{
-				return;
-			}
 
             if (prevElementType == SourceElementType.Comment)
             {
