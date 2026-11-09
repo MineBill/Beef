@@ -1996,9 +1996,7 @@ void BfPrinter::Visit(BfLambdaBindExpression* lambdaBindExpr)
 		if (lambdaBindExpr->mBody->IsA<BfBlock>())
 		{
 			ExpectNewLine();
-			ExpectIndent();
 			VisitChild(lambdaBindExpr->mBody);
-			ExpectUnindent();
 		}
 		else
 		{
@@ -3305,8 +3303,6 @@ void BfPrinter::DoBlockOpen(BfAstNode* prevNode, BfTokenNode* blockOpen, BfToken
 	{
 		ExpectNewLine();
 		mNextStateModify.mDoingBlockOpen = true;
-		if (prevNode != NULL)
-			ExpectIndent();
 	}
 	else if (!blockState.mIsCompact)
 		ExpectSpace();
