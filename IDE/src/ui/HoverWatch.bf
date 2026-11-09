@@ -1750,8 +1750,8 @@ namespace IDE.ui
             screenX += parentWidget.mWidgetWindow.mClientX;
             screenY += parentWidget.mWidgetWindow.mClientY;
 
-			screenX -= GS!(2);
-			screenY += GS!(14);
+			screenX -= GS!(4); // TODO(minebill): Make this appear under the text location.
+			screenY += GS!(20); // same
 			/*if (screenY + screenHeight + 0 >= workspaceHeight)
 			{
 				screenY -= screenHeight;
