@@ -6308,7 +6308,6 @@ namespace IDE.ui
 					{
 						float offset = GetTextOffset();
 
-						g.FillRect(x1, y1 + offset, charWidth, height);
 						g.FillRect(x2, y2 + offset, charWidth, height);
 					}
 				}
