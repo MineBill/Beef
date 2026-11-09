@@ -5404,6 +5404,33 @@ namespace IDE.ui
                 IDEApp.sApp.mSymbolReferenceHelper.SourceUpdateText(this, index);
         }
 
+		// True for an empty/whitespace-only line with non-blank lines both above and below it
+		bool IsBlankLineBetweenNonBlank(int line)
+		{
+			if (!IsLineWhiteSpace(line))
+				return false;
+
+			bool hasPrev = false;
+			for (int checkLine = line - 1; checkLine >= 0; checkLine--)
+			{
+				if (!IsLineWhiteSpace(checkLine))
+				{
+					hasPrev = true;
+					break;
+				}
+			}
+			if (!hasPrev)
+				return false;
+
+			int lineCount = GetLineCount();
+			for (int checkLine = line + 1; checkLine < lineCount; checkLine++)
+			{
+				if (!IsLineWhiteSpace(checkLine))
+					return true;
+			}
+			return false;
+		}
+
 		public override void ClampCursor()
 		{
 			base.ClampCursor();
@@ -5416,6 +5443,18 @@ namespace IDE.ui
 			int line;
 			int lineChar;
 			GetCursorLineChar(out line, out lineChar);            
+
+			// Don't let the caret sit in the virtual auto-indent on a blank line inside code
+			if (IsBlankLineBetweenNonBlank(line))
+			{
+				String blankLineStr = scope String();
+				GetLineText(line, blankLineStr);
+				int lineEndCol = (mCharWidth > 0)
+					? (int32)(GetTabbedWidth(blankLineStr, 0) / mCharWidth + 0.001f)
+					: (int32)blankLineStr.NumCodePoints;
+				CurVirtualCursorPos.ValueRef.mColumn = (.)Math.Min(CurVirtualCursorPos.Value.mColumn, Math.Max(0, lineEndCol));
+				return;
+			}
 			
 			float wantWidth = 0;
 			int virtualEnd = GetLineEndColumn(line, false, false, false, false, false, &wantWidth);
