@@ -2762,10 +2762,10 @@ namespace Beefy.widgets
 			        break;
 			    if (char8Type != prevCharType)
 			    {
-			        if ((char8Type != .WhiteSpace) && (prevCharType == .WhiteSpace))
-			            break;
-			        if ((char8Type == .NewLine) || (char8Type == .NonBreaking) || (char8Type == .Other))
-			            break;
+					if (char8Type == .WhiteSpace)
+					    break;
+					if ((char8Type == .NewLine) || (char8Type == .NonBreaking && prevCharType != .WhiteSpace) || (char8Type == .Other))
+					    break;
 			    }
 
 				if ((isWordMove) && (c.IsUpper) && (prevC.IsLower))
