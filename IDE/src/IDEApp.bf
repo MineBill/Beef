@@ -7182,6 +7182,7 @@ namespace IDE
 			editWidgetContent.mUnfocusedHiliteColor = mSettings.mUISettings.mColors.mCodeHiliteUnfocused;
 			editWidgetContent.mHiliteCurrentLine = mSettings.mEditorSettings.mHiliteCurrentLine;
 			editWidgetContent.mBlockCursor = mSettings.mEditorSettings.mBlockCursor;
+			editWidgetContent.mAnimateCursor = mSettings.mEditorSettings.mAnimateCursor;
 
 			return editWidget;
 		}

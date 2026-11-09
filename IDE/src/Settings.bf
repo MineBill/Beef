@@ -742,6 +742,7 @@ namespace IDE
 			public bool mDebugMultiCursor = false;
 			public bool mHiliteCurrentLine = false;
 			public bool mBlockCursor = false;
+			public bool mAnimateCursor = true;
 			public bool mLockEditing;
 			public LockWhileDebuggingKind mLockEditingWhenDebugging = .WhenNotHotSwappable;// Only applicable for
 			public CompilerKind mEmitCompiler;
@@ -778,6 +779,7 @@ namespace IDE
 				sd.Add("HiliteCursorReferences", mHiliteCursorReferences);
 				sd.Add("HiliteCurrentLine", mHiliteCurrentLine);
 				sd.Add("BlockCursor", mBlockCursor);
+				sd.Add("AnimateCursor", mAnimateCursor);
 				sd.Add("LockEditing", mLockEditing);
 				sd.Add("LockEditingWhenDebugging", mLockEditingWhenDebugging);
 				sd.Add("EmitCompiler", mEmitCompiler);
@@ -817,6 +819,7 @@ namespace IDE
 				sd.Get("HiliteCursorReferences", ref mHiliteCursorReferences);
 				sd.Get("HiliteCurrentLine", ref mHiliteCurrentLine);
 				sd.Get("BlockCursor", ref mBlockCursor);
+				sd.Get("AnimateCursor", ref mAnimateCursor);
 				sd.Get("LockEditing", ref mLockEditing);
 				sd.Get("LockEditingWhenDebugging", ref mLockEditingWhenDebugging);
 				sd.Get("EmitCompiler", ref mEmitCompiler);
@@ -1514,6 +1517,7 @@ namespace IDE
 					var ewc = (SourceEditWidgetContent)value.mEditWidget.Content;
 					ewc.mHiliteCurrentLine = gApp.mSettings.mEditorSettings.mHiliteCurrentLine;
 					ewc.mBlockCursor = gApp.mSettings.mEditorSettings.mBlockCursor;
+					ewc.mAnimateCursor = gApp.mSettings.mEditorSettings.mAnimateCursor;
 					ewc.mLineHeightScale = gApp.mSettings.mEditorSettings.mLineHeightScale;
 					ewc.RehupLineCoords();
 				}

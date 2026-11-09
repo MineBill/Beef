@@ -65,6 +65,20 @@ namespace Beefy.theme.dark
 		public bool mHiliteCurrentLine;
 		// Draw the insertion cursor as a block over the character instead of a thin bar
 		public bool mBlockCursor;
+		// Smoothly animate the insertion cursor between positions instead of snapping
+		public bool mAnimateCursor;
+
+		const int32 cCursorAnimTicks = 5;
+		float mCursorAnimX;
+		float mCursorAnimY;
+		float mCursorAnimStartX;
+		float mCursorAnimStartY;
+		float mCursorAnimTargetX;
+		float mCursorAnimTargetY;
+		int32 mCursorAnimTick;
+		bool mCursorAnimActive;
+		bool mCursorAnimInited;
+		bool mCursorAnimDraw;
 		public Dictionary<int32, Embed> mEmbeds = new .() ~ DeleteDictionaryAndValues!(_);
 		public Embed mEmbedSelected;
 		public Range? mLineRange;
@@ -575,10 +589,11 @@ namespace Beefy.theme.dark
             GetLineCharAtCoord(0, -mY + mEditWidget.mScrollContentContainer.mHeight, out lastLine, out lastCharIdx, out lastOverflowX);
 
 			bool drewCursor = false;
+			mCursorAnimDraw = false;
 
-			void DrawCursor(float x, float y, int32 textPos, bool isSecondary = false)
+			void DrawCursor(float x, float y, int32 textPos, bool isSecondary = false, bool skipCaret = false, bool skipHilite = false)
 			{
-				if (mHiliteCurrentLine && selStartIdx == selEndIdx)
+				if ((!skipHilite) && (mHiliteCurrentLine) && (selStartIdx == selEndIdx))
 				{
 					float thickness = Math.Ceiling(2 * (Math.Floor(fontLineSpacing) / 18));
 					// This isn't quite the right value, but I'm not sure how to get this
@@ -601,7 +616,7 @@ namespace Beefy.theme.dark
 				if (blinkTime <= 0)
 					blinkRate = 0;
 				else
-					blinkRate = (blinkRate * 530) / blinkTime;
+					blinkRate = (blinkRate * 265) / blinkTime;
 #endif
 
 			    float brightness = (float)Math.Cos(Math.Max(0.0f, mCursorBlinkTicks - 20) * blinkRate);                      
@@ -613,7 +628,11 @@ namespace Beefy.theme.dark
 
 				bool dimCursor = (sDebugMultiCursor) && (mTextCursors.Count > 1) && (isSecondary);
 
-			    if (mOverTypeMode)
+				if (skipCaret)
+				{
+					// Only the current-line highlight was wanted
+				}
+			    else if (mOverTypeMode)
 			    {
 			        if (mCharWidth <= 2)
 			        {
@@ -809,7 +828,16 @@ namespace Beefy.theme.dark
                         if (aX != -1)
 						{
 							int32 cursorTextPos = (CurVirtualCursorPos != null) ? -1 : CurCursorTextPos;
-							DrawCursor(aX, curY, cursorTextPos);
+							UpdateCursorAnim(aX, curY);
+							if (mCursorAnimActive)
+							{
+								// Keep the current-line highlight at the target, but draw the caret
+								//  at its animated position after the text pass
+								DrawCursor(aX, curY, cursorTextPos, false, true);
+								mCursorAnimDraw = true;
+							}
+							else
+								DrawCursor(aX, curY, cursorTextPos);
 						}
                     }
 
@@ -828,9 +856,16 @@ namespace Beefy.theme.dark
 
 					if ((!drewCursor) && (IsLineCollapsed(CursorLineAndColumn.mLine)) &&
 						(GetLineY(CursorLineAndColumn.mLine, -1) == GetLineY(lineIdx + 1, -1)))
-						DrawCursor(embedRect.Right + GS!(2), curY, -1);
+					{
+						float embedCursorX = embedRect.Right + GS!(2);
+						SnapCursorAnim(embedCursorX, curY);
+						DrawCursor(embedCursorX, curY, -1);
+					}
 				}
             }
+
+			if (!drewCursor)
+				mCursorAnimActive = false;
 
 			if (mEditWidget.mHasFocus)
 			{
@@ -919,6 +954,13 @@ namespace Beefy.theme.dark
 					DrawCursor(x, y, cursor.mVirtualCursorPos.HasValue ? -1 : cursor.mCursorTextPos, true);
 				}
 				SetTextCursor(prevTextCursor);
+
+				if (mCursorAnimDraw)
+				{
+					// Primary caret drawn at the interpolated animation position
+					DrawCursor(mCursorAnimX, mCursorAnimY, -1, false, false, true);
+					mCursorAnimDraw = false;
+				}
 			}
 
             g.PopMatrix();
@@ -999,6 +1041,50 @@ namespace Beefy.theme.dark
 			if (line >= lineCount)
 			    line = lineCount - 1;
 			return line;
+		}
+
+		void SnapCursorAnim(float x, float y)
+		{
+			mCursorAnimX = x;
+			mCursorAnimY = y;
+			mCursorAnimTargetX = x;
+			mCursorAnimTargetY = y;
+			mCursorAnimActive = false;
+			mCursorAnimInited = true;
+		}
+
+		void UpdateCursorAnim(float x, float y)
+		{
+			if (!mCursorAnimInited)
+			{
+				SnapCursorAnim(x, y);
+				return;
+			}
+
+			// Don't animate scroll-induced movement, or when the animation is turned off
+			if ((!mAnimateCursor) || (mEditWidget.mVertPos.IsMoving) || (mEditWidget.mHorzPos.IsMoving))
+			{
+				SnapCursorAnim(x, y);
+				return;
+			}
+
+			if ((x == mCursorAnimTargetX) && (y == mCursorAnimTargetY))
+			{
+				if (!mCursorAnimActive)
+				{
+					mCursorAnimX = x;
+					mCursorAnimY = y;
+				}
+				return;
+			}
+
+			// Start from the currently drawn position so chained moves stay smooth
+			mCursorAnimStartX = mCursorAnimX;
+			mCursorAnimStartY = mCursorAnimY;
+			mCursorAnimTargetX = x;
+			mCursorAnimTargetY = y;
+			mCursorAnimTick = 0;
+			mCursorAnimActive = true;
 		}
 
 		public override void PhysCursorMoved(CursorMoveKind moveKind)
@@ -1322,6 +1408,22 @@ namespace Beefy.theme.dark
         public override void Update()
         {
             base.Update();
+
+			if (mCursorAnimActive)
+			{
+				mCursorAnimTick++;
+				float t = Math.Min(1.0f, mCursorAnimTick / (float)cCursorAnimTicks);
+				// Ease out so the caret settles instead of stopping abruptly
+				float eased = 1.0f - (1.0f - t) * (1.0f - t) * (1.0f - t);
+				mCursorAnimX = mCursorAnimStartX + (mCursorAnimTargetX - mCursorAnimStartX) * eased;
+				mCursorAnimY = mCursorAnimStartY + (mCursorAnimTargetY - mCursorAnimStartY) * eased;
+				if (t >= 1.0f)
+				{
+					mCursorAnimActive = false;
+					mCursorAnimX = mCursorAnimTargetX;
+					mCursorAnimY = mCursorAnimTargetY;
+				}
+			}
 
             if ((mRecalcSizeLineNum != -1) && (BFApp.sApp.mIsUpdateBatchStart))
             {
