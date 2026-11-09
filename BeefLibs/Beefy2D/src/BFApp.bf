@@ -55,7 +55,7 @@ namespace Beefy
         public bool mIsUpdateBatchStart;
 		public bool mAutoDirty = true;
         public Graphics mGraphics ~ delete _;
-        int32 mRefreshRate = 60;
+        int32 mRefreshRate = 144;
         public String mInstallDir ~ delete _;
         public String mUserDataDir ~ delete _;
         public List<BFWindow> mWindows = new List<BFWindow>() ~ delete _;
@@ -812,7 +812,7 @@ namespace Beefy
                     if (mFPSUpdateCount == mRefreshRate)
                     {
                         mLastFPS = mFPSDrawCount;
-                        //Debug.WriteLine("FPS: " + mLastFPS);
+                        //Debug.WriteLine($"FPS: {mLastFPS}");
 
                         mFPSUpdateCount = 0;
                         mFPSDrawCount = 0;

@@ -16253,7 +16253,7 @@ namespace IDE
 			}
 			else
 			{
-				RefreshRate = 60;
+				RefreshRate = 144;
 			}
 #if BF_PLATFORM_WINDOWS
 			if (mTerminalPanel != null)
