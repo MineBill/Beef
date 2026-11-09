@@ -13,8 +13,6 @@ namespace IDE.ui
 {
 	class ClassViewPanel : Panel
 	{
-		private static String sLastSearchString = new String() ~ delete _;
-
 		public class ClassViewListViewItem : IDEListViewItem
 		{
 		    public float mLabelOffset;
@@ -37,9 +35,6 @@ namespace IDE.ui
 		    {
 				bool hasFocus = mListView.mHasFocus;
 				if ((mWidgetWindow.mFocusWidget != null) && (mWidgetWindow.mFocusWidget.HasParent(mListView)))
-					hasFocus = true;
-				let parent = (ClassViewListView)mListView;
-				if (parent.mPanel.mFindClassDialog != null)
 					hasFocus = true;
 		        using (g.PushColor(hasFocus ? 0xFFFFFFFF : 0x80FFFFFF))
 		            base.DrawSelect(g);
@@ -345,17 +340,14 @@ namespace IDE.ui
 		public bool mTypesDirty = true;
 		public bool mMembersDirty = true;
 		public int32 mWorkWait = -1;
-		public bool mWantsSubmit;
 
 		public String mRequestedTypeName = new .() ~ delete _;
 		public String mRequestedSearchStr = new .() ~ delete _;
 		PendingInfo mPendingInfo ~ delete _;
 		public List<PendingEntry> mHiddenEntries = new .() ~ DeleteContainerAndItems!(_);
-		public FindClassDialog mFindClassDialog;
 
-		public this(FindClassDialog findClassDialog = null)
+		public this()
 		{
-			mFindClassDialog = findClassDialog;
 			mSearchEdit = new DarkEditWidget();
 			mSearchEdit.mOnKeyDown.Add(new (evt) =>
 				{
@@ -374,51 +366,25 @@ namespace IDE.ui
 			mTypeLV.mOnItemMouseClicked.Add(new => ListViewItemMouseClicked);
 			mTypeLV.mOnKeyDown.Add(new => ListViewKeyDown_ShowMenu);
 
-			if (mFindClassDialog == null)
-			{
-				mMemberLV = new ClassViewListView();
-				mMemberLV.mPanel = this;
-				mMemberLV.SetShowHeader(false);
-				mMemberLV.InitScrollbars(true, true);
-				mMemberLV.mOnItemMouseDown.Add(new => ItemMouseDown);
-				mMemberLV.mOnItemMouseClicked.Add(new => ListViewItemMouseClicked);
-				mMemberLV.mOnKeyDown.Add(new => ListViewKeyDown_ShowMenu);
-			
-				var typeDock = new TypeArea();
-				typeDock.mPanel = this;
-				typeDock.AddWidget(mSearchEdit);
-				typeDock.AddWidget(mTypeLV);
-				var memberDock = new DockingProxy(mMemberLV);
-	
-				mDockingFrame = new DarkDockingFrame();
-				mDockingFrame.mDrawBkg = false;
-				mDockingFrame.AddDockedWidget(typeDock, null, .Top);
-				mDockingFrame.AddDockedWidget(memberDock, typeDock, .Bottom);
-				AddWidget(mDockingFrame);
-			}
-			else
-			{
-				AddWidget(mTypeLV);
-				AddWidget(mSearchEdit);
+			mMemberLV = new ClassViewListView();
+			mMemberLV.mPanel = this;
+			mMemberLV.SetShowHeader(false);
+			mMemberLV.InitScrollbars(true, true);
+			mMemberLV.mOnItemMouseDown.Add(new => ItemMouseDown);
+			mMemberLV.mOnItemMouseClicked.Add(new => ListViewItemMouseClicked);
+			mMemberLV.mOnKeyDown.Add(new => ListViewKeyDown_ShowMenu);
+		
+			var typeDock = new TypeArea();
+			typeDock.mPanel = this;
+			typeDock.AddWidget(mSearchEdit);
+			typeDock.AddWidget(mTypeLV);
+			var memberDock = new DockingProxy(mMemberLV);
 
-				mFindClassDialog.[Friend]mTabWidgets.Add(mTypeLV);
-				mFindClassDialog.[Friend]mTabWidgets.Add(mSearchEdit);
-
-				mSearchEdit.mOnKeyDown.Add(new => EditKeyDownHandler);
-				mSearchEdit.mOnSubmit.Add(new (evt) =>
-					{
-						mWantsSubmit = true;
-					});
-
-				mSearchEdit.SetText(sLastSearchString);
-				mSearchEdit.Content.SelectAll();
-
-				findClassDialog.mOnClosed.Add(new () =>
-					{
-						sLastSearchString.Clear();
-						mSearchEdit.GetText(sLastSearchString);
-					});
-			}
+			mDockingFrame = new DarkDockingFrame();
+			mDockingFrame.mDrawBkg = false;
+			mDockingFrame.AddDockedWidget(typeDock, null, .Top);
+			mDockingFrame.AddDockedWidget(memberDock, typeDock, .Bottom);
+			AddWidget(mDockingFrame);
 
 		    //mListView.mDragEndHandler.Add(new => HandleDragEnd);
 		    //mListView.mDragUpdateHandler.Add(new => HandleDragUpdate);
@@ -442,32 +408,6 @@ namespace IDE.ui
 		{
 			if (mPendingInfo != null)
 				mPendingInfo.mDoneEvent.WaitFor();
-		}
-
-		void EditKeyDownHandler(KeyDownEvent evt)
-		{
-			switch (evt.mKeyCode)
-			{
-			case .Up,
-				 .Down,
-				 .Left,
-				 .Right,
-				 .PageUp,
-				 .PageDown:
-				mTypeLV.KeyDown(evt.mKeyCode, false);
-			default:
-			}
-
-			if (evt.mKeyFlags.HeldKeys == .Ctrl)
-			{
-				switch (evt.mKeyCode)
-				{
-				case .Home,
-					 .End:
-					mTypeLV.KeyDown(evt.mKeyCode, false);
-				default:
-				}
-			}
 		}
 
 		void SetScaleData()
@@ -584,8 +524,6 @@ namespace IDE.ui
 			{
 				gApp.RecordHistoryLocation(true);
 				gApp.ShowSourceFileLocation(file, -1, -1, line, column, .Always);
-				if (mFindClassDialog != null)
-					mFindClassDialog.Close();
 			}
 
 			if (item.mMemberInfo != null)
@@ -1008,14 +946,6 @@ namespace IDE.ui
 				}
 			}
 
-			if (mWorkWait == -1)
-			{
-				if (mWantsSubmit)
-				{
-					mTypeLV.KeyDown(.Return, false);
-					mWantsSubmit = false;
-				}
-			}
 		}
 
 		public override void Resize(float x, float y, float width, float height)
@@ -1058,9 +988,6 @@ namespace IDE.ui
 						DrawRefresh(mTypeLV, mUpdateCnt);
 				}
 			}
-
-			if (mFindClassDialog != null)
-				IDEUtils.DrawOutline(g, mTypeLV);
 		}
 	}
 }

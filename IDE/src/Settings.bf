@@ -741,6 +741,7 @@ namespace IDE
 			public bool mHiliteCursorReferences = true;
 			public bool mDebugMultiCursor = false;
 			public bool mHiliteCurrentLine = false;
+			public bool mBlockCursor = false;
 			public bool mLockEditing;
 			public LockWhileDebuggingKind mLockEditingWhenDebugging = .WhenNotHotSwappable;// Only applicable for
 			public CompilerKind mEmitCompiler;
@@ -776,6 +777,7 @@ namespace IDE
 				sd.Add("ShowLocatorAnim", mShowLocatorAnim);
 				sd.Add("HiliteCursorReferences", mHiliteCursorReferences);
 				sd.Add("HiliteCurrentLine", mHiliteCurrentLine);
+				sd.Add("BlockCursor", mBlockCursor);
 				sd.Add("LockEditing", mLockEditing);
 				sd.Add("LockEditingWhenDebugging", mLockEditingWhenDebugging);
 				sd.Add("EmitCompiler", mEmitCompiler);
@@ -814,6 +816,7 @@ namespace IDE
 				sd.Get("ShowLocatorAnim", ref mShowLocatorAnim);
 				sd.Get("HiliteCursorReferences", ref mHiliteCursorReferences);
 				sd.Get("HiliteCurrentLine", ref mHiliteCurrentLine);
+				sd.Get("BlockCursor", ref mBlockCursor);
 				sd.Get("LockEditing", ref mLockEditing);
 				sd.Get("LockEditingWhenDebugging", ref mLockEditingWhenDebugging);
 				sd.Get("EmitCompiler", ref mEmitCompiler);
@@ -920,7 +923,7 @@ namespace IDE
 				Add("Comment Lines", "Ctrl+K, Ctrl+/");
 				Add("Comment Toggle", "Ctrl+K, Ctrl+T");
 				Add("Debug Comptime", "Alt+F7");
-				Add("Find Class", "Alt+Shift+L");
+				Add("Find", "Alt+Shift+L");
 				Add("Find in Document", "Ctrl+F");
 				Add("Find in Files", "Ctrl+Shift+F");
 				Add("Find Next", "F3");
@@ -1510,6 +1513,7 @@ namespace IDE
 				{
 					var ewc = (SourceEditWidgetContent)value.mEditWidget.Content;
 					ewc.mHiliteCurrentLine = gApp.mSettings.mEditorSettings.mHiliteCurrentLine;
+					ewc.mBlockCursor = gApp.mSettings.mEditorSettings.mBlockCursor;
 					ewc.mLineHeightScale = gApp.mSettings.mEditorSettings.mLineHeightScale;
 					ewc.RehupLineCoords();
 				}

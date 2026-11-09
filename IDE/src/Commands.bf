@@ -254,8 +254,8 @@ namespace IDE
 			Add("Delete All Right", new => gApp.[Friend]DeleteAllRight);
 			Add("Duplicate Line", new () => { gApp.[Friend]DuplicateLine(); });
 			Add("Exit", new => gApp.[Friend]Cmd_Exit);
+			Add("Find", new => gApp.Cmd_FindFileOrClass);
 			Add("Find All References", new => gApp.Cmd_FindAllReferences);
-			Add("Find Class", new => gApp.Cmd_FindClass);
 			Add("Find in Document", new => gApp.Cmd_Document__Find);
 			Add("Find in Files", new => gApp.Cmd_Find);
 			Add("Find Next", new => gApp.Cmd_FindNext);

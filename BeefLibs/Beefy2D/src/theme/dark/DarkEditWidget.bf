@@ -63,6 +63,8 @@ namespace Beefy.theme.dark
 		public uint32 mViewWhiteSpaceColor;
 		public bool mScrollToStartOnLostFocus;
 		public bool mHiliteCurrentLine;
+		// Draw the insertion cursor as a block over the character instead of a thin bar
+		public bool mBlockCursor;
 		public Dictionary<int32, Embed> mEmbeds = new .() ~ DeleteDictionaryAndValues!(_);
 		public Embed mEmbedSelected;
 		public Range? mLineRange;
@@ -574,7 +576,7 @@ namespace Beefy.theme.dark
 
 			bool drewCursor = false;
 
-			void DrawCursor(float x, float y, bool isSecondary = false)
+			void DrawCursor(float x, float y, int32 textPos, bool isSecondary = false)
 			{
 				if (mHiliteCurrentLine && selStartIdx == selEndIdx)
 				{
@@ -609,6 +611,8 @@ namespace Beefy.theme.dark
 
 				Color cursorColor = mTextColors[0];
 
+				bool dimCursor = (sDebugMultiCursor) && (mTextCursors.Count > 1) && (isSecondary);
+
 			    if (mOverTypeMode)
 			    {
 			        if (mCharWidth <= 2)
@@ -622,17 +626,51 @@ namespace Beefy.theme.dark
 			                g.FillRect(x, y + textYOffset, mCharWidth, fontLineSpacing);
 			        }
 			    }
+			    else if (mBlockCursor)
+			    {
+					float cursorY = y + textYOffset;
+					float cursorWidth = (mCharWidth > 0) ? mCharWidth : Math.Max(1.0f, mFont.GetWidth(' '));
+
+					if (dimCursor)
+						cursorColor.A = (.)(cursorColor.A * 0.5f);
+
+					using (g.PushColor(Color.Mult(cursorColor, Color.Get(brightness))))
+						g.FillRect(x, cursorY, cursorWidth, fontLineSpacing);
+
+					// Redraw the character under the block in the background color so it stays readable.
+					//  The background-color redraw fades along with the block.
+					if ((textPos >= 0) && (textPos < mData.mTextLength))
+					{
+						char8 c = mData.mText[textPos].mChar;
+						if ((c != '\n') && (c != '\r') && (c != '\t'))
+						{
+							// Include the rest of a UTF-8 sequence so multibyte characters redraw correctly
+							int32 charLen = 1;
+							uint8 c8 = (uint8)c;
+							if (c8 >= 0xF0)
+								charLen = 4;
+							else if (c8 >= 0xE0)
+								charLen = 3;
+							else if (c8 >= 0xC0)
+								charLen = 2;
+							charLen = Math.Min(charLen, mData.mTextLength - textPos);
+
+							String charStr = scope String(charLen);
+							ExtractString(textPos, charLen, charStr);
+
+							using (g.PushColor(Color.Mult(DarkTheme.COLOR_BKG, Color.Get(brightness))))
+								DoDrawText(g, charStr, x, cursorY);
+						}
+					}
+			    }
 			    else
 			    {
 					float cursorY = y + textYOffset;
 					float cursorHeight = fontLineSpacing;
 					float cursorWidth = Math.Max(1.0f, GS!(2));
 
-					if ((sDebugMultiCursor) && (mTextCursors.Count > 1))
-					{
-						if (isSecondary)
-							cursorColor.A = (.)(cursorColor.A * 0.5f);
-					}
+					if (dimCursor)
+						cursorColor.A = (.)(cursorColor.A * 0.5f);
 
 					using (g.PushColor(Color.Mult(cursorColor, Color.Get(brightness))))
 			            g.FillRect(x, cursorY, cursorWidth, cursorHeight);
@@ -769,7 +807,10 @@ namespace Beefy.theme.dark
                         }                        
 
                         if (aX != -1)
-							DrawCursor(aX, curY);
+						{
+							int32 cursorTextPos = (CurVirtualCursorPos != null) ? -1 : CurCursorTextPos;
+							DrawCursor(aX, curY, cursorTextPos);
+						}
                     }
 
                     lineDrawStart = lineDrawEnd;
@@ -787,7 +828,7 @@ namespace Beefy.theme.dark
 
 					if ((!drewCursor) && (IsLineCollapsed(CursorLineAndColumn.mLine)) &&
 						(GetLineY(CursorLineAndColumn.mLine, -1) == GetLineY(lineIdx + 1, -1)))
-						DrawCursor(embedRect.Right + GS!(2), curY);
+						DrawCursor(embedRect.Right + GS!(2), curY, -1);
 				}
             }
 
@@ -875,7 +916,7 @@ namespace Beefy.theme.dark
 						y = mLineCoords[eStartLine];
 					}
 
-					DrawCursor(x, y, true);
+					DrawCursor(x, y, cursor.mVirtualCursorPos.HasValue ? -1 : cursor.mCursorTextPos, true);
 				}
 				SetTextCursor(prevTextCursor);
 			}

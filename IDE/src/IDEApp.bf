@@ -208,6 +208,8 @@ namespace IDE
 		public RecentFileSelector mRecentFileSelector;
 		// The open command palette, if any. Cleared when its popup window closes.
 		public CommandPalette mCommandPalette;
+		// The open Find dialog, if any. Cleared when its popup window closes.
+		public FindDialog mFindDialog;
 
 		public IDETabbedView mActiveDocumentsTabbedView;
 		public static new IDEApp sApp;
@@ -4460,14 +4462,9 @@ namespace IDE
 		}
 
 		[IDECommand]
-		public void Cmd_FindClass()
+		public void Cmd_FindFileOrClass()
 		{
-			var widgetWindow = GetCurrentWindow();
-			if (widgetWindow != null)
-			{
-				var dialog = new FindClassDialog();
-				dialog.PopupWindow(mMainWindow);
-			}
+			FindDialog.Show();
 		}
 
 		[IDECommand]
@@ -6260,7 +6257,7 @@ namespace IDE
 			subMenu.AddMenuItem("&Rename Symbol", "Rename Symbol", new => UpdateMenuItem_HasActiveDocument);
 			subMenu.AddMenuItem("Show Fi&xit", "Show Fixit", new => UpdateMenuItem_HasActiveDocument);
 			subMenu.AddMenuItem("Find &All References", "Find All References", new => UpdateMenuItem_HasActiveDocument);
-			subMenu.AddMenuItem("Find C&lass...", "Find Class");
+			subMenu.AddMenuItem("&Find...", "Find");
 			subMenu.AddMenuItem(null);
 
 			var encodingMenu = subMenu.AddMenuItem("Encoding");
@@ -7184,6 +7181,7 @@ namespace IDE
 			editWidgetContent.mHiliteColor = mSettings.mUISettings.mColors.mCodeHilite;
 			editWidgetContent.mUnfocusedHiliteColor = mSettings.mUISettings.mColors.mCodeHiliteUnfocused;
 			editWidgetContent.mHiliteCurrentLine = mSettings.mEditorSettings.mHiliteCurrentLine;
+			editWidgetContent.mBlockCursor = mSettings.mEditorSettings.mBlockCursor;
 
 			return editWidget;
 		}
