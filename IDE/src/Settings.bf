@@ -1492,6 +1492,9 @@ namespace IDE
 			mUISettings.Apply();
 			mEditorSettings.Apply();
 
+			if (gApp.mMainWindow != null)
+				gApp.mMainWindow.SetWindowBorderColor(Color.Lerp(DarkTheme.COLOR_BKG, DarkTheme.COLOR_TEXT, 0.12f));
+
 			Font.ClearFontNameCache();
 			gApp.PhysSetScale(gApp.mSettings.mUISettings.mScale / 100.0f, true);
 

@@ -132,7 +132,7 @@ public class MenuBar : Widget
 
 			if (mMouseOver)
 			{
-				using (g.PushColor(0x40FFFFFF))
+				using (g.PushColor(Color.Mult(DarkTheme.COLOR_TEXT, Color.Get(0.12f))))
 				{
 					g.FillRect(0, 0, mWidth, mHeight);
 				}
@@ -215,12 +215,12 @@ public class MenuBar : Widget
 				}
 				else
 				{
-					using (g.PushColor(mMouseDown ? 0x40FFFFFF : 0x20FFFFFF))
+					using (g.PushColor(Color.Mult(DarkTheme.COLOR_TEXT, Color.Get(mMouseDown ? 0.16f : 0.08f))))
 						g.FillRect(0, 0, mWidth, mHeight);
 				}
 			}
 
-			uint32 glyphColor = (isClose && (mMouseOver || mMouseDown)) ? Color.White : (active ? 0xFFE0E0E0 : 0xFF909090);
+			uint32 glyphColor = (isClose && (mMouseOver || mMouseDown)) ? Color.White : (active ? DarkTheme.COLOR_TEXT : DarkTheme.COLOR_TEXT_DISABLED);
 
 			float cx = mWidth / 2;
 			float cy = mHeight / 2;
@@ -457,7 +457,7 @@ public class MenuBar : Widget
 			if (titleWidth > GS!(20))
 			{
 				g.SetFont(DarkTheme.sDarkTheme.mSmallFont);
-				uint32 titleColor = mWidgetWindow.mHasFocus ? 0xFFB8B8B8 : 0xFF707070;
+				uint32 titleColor = mWidgetWindow.mHasFocus ? DarkTheme.COLOR_TEXT : DarkTheme.COLOR_TEXT_DISABLED;
 				using (g.PushColor(titleColor))
 					g.DrawString(title, leftInset, (mHeight - GS!(20)) / 2, .Centered, titleWidth, .Ellipsis);
 			}

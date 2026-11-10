@@ -13802,7 +13802,7 @@ namespace IDE
 			UpdateTitle();
 			mMainWindow.SetMinimumSize(GS!(480), GS!(360));
 			mMainWindow.mIsMainWindow = true;
-			mMainWindow.SetWindowBorderColor(Color.Lerp(DarkTheme.COLOR_BKG, Color.White, 0.12f));
+			mMainWindow.SetWindowBorderColor(Color.Lerp(DarkTheme.COLOR_BKG, DarkTheme.COLOR_TEXT, 0.12f));
 			mMainWindow.mOnMouseUp.Add(new => MouseUp);
 			mMainWindow.mOnWindowKeyDown.Add(new => SysKeyDown);
 			mMainWindow.mOnWindowKeyUp.Add(new => SysKeyUp);
