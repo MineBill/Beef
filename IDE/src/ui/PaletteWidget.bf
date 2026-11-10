@@ -35,7 +35,7 @@ namespace IDE.ui
 
 		public this()
 		{
-			mPadding = GS!(6);
+			mPadding = GS!(8);
 			mRowHeight = DarkTheme.sDarkTheme.mSmallFont.GetLineSpacing() + GS!(2);
 			mEditHeight = GS!(24);
 		}
@@ -62,7 +62,7 @@ namespace IDE.ui
 		protected void InitPalette(String title, String initialText = null)
 		{
 			mEditWidget = new DarkEditWidget();
-			mEditWidget.mDrawBox = false;
+			mEditWidget.mDrawBox = true;
 			mEditWidget.mOnKeyDown.Add(new => HandleEditKeyDown);
 			mEditWidget.mOnSubmit.Add(new => HandleSubmit);
 			mEditWidget.mOnContentChanged.Add(new => HandleContentChanged);
@@ -307,17 +307,20 @@ namespace IDE.ui
 
 		public override void Draw(Graphics g)
 		{
-			using (g.PushColor(DarkTheme.COLOR_WINDOW))
-				g.FillRect(0, 0, mWidth, mHeight);
-			using (g.PushColor(DarkTheme.COLOR_DIALOG_OUTLINE_OUT))
-				g.OutlineRect(0, 0, mWidth, mHeight);
-
-			var font = DarkTheme.sDarkTheme.mSmallFont;
-			g.SetFont(font);
-
 			float listLeft = mPadding;
 			float listTop = mPadding + mEditHeight + mPadding;
 			float listWidth = mWidth - mPadding * 2;
+			float listHeight = mHeight - listTop - mPadding;
+
+			using (g.PushColor(DarkTheme.COLOR_BKG))
+				g.FillRect(0, 0, mWidth, mHeight);
+			using (g.PushColor(DarkTheme.COLOR_WINDOW))
+				g.FillRect(listLeft, listTop, listWidth, listHeight);
+			using (g.PushColor(DarkTheme.COLOR_DIALOG_OUTLINE_OUT))
+				g.OutlineRect(0, 0, mWidth, mHeight, 2);
+
+			var font = DarkTheme.sDarkTheme.mSmallFont;
+			g.SetFont(font);
 
 			int32 visRows = GetVisibleRows();
 			for (int32 i = 0; i < visRows; i++)
