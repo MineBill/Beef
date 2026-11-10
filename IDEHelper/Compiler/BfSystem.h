@@ -929,6 +929,25 @@ enum BfAllowAppendKind : int8
 	BfAllowAppendKind_Infer
 };
 
+class BfLocalVarInfo
+{
+public:
+	String mName;
+	String mDeclFile;
+	int mDeclLine;
+	int mDeclColumn;
+
+public:
+	BfLocalVarInfo()
+	{
+		mDeclLine = 0;
+		mDeclColumn = 0;
+	}
+};
+
+uint64 BfGetFilePathHash(const StringImpl& filePath);
+bool BfFilePathEquals(const StringImpl& filePathA, const StringImpl& filePathB);
+
 class BfMethodDef : public BfMemberDef
 {
 public:

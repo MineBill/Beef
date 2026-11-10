@@ -7374,6 +7374,36 @@ namespace IDE.ui
             mHasChangedSinceLastCompile = !mEditWidget.Content.mData.mTextIdData.Equals(projectSourceCompileInstance.mSourceCharIdData);            
         }
 
+		public int GetCurrentDebugLine()
+		{
+			if (!IDEApp.sApp.mExecutionPaused)
+				return -1;
+
+			var debugger = IDEApp.sApp.mDebugger;
+			if ((debugger == null) || (!debugger.IsPaused()))
+				return -1;
+
+			int addr;
+			String fileName = scope String(Path.[Friend]MaxPath);
+			int hotIdx;
+			int defLineStart;
+			int defLineEnd;
+			int lineNum;
+			int column;
+			int language;
+			int stackSize;
+			DebugManager.FrameFlags flags;
+			debugger.GetStackFrameInfo(debugger.mActiveCallStackIdx, null, out addr, fileName, out hotIdx, out defLineStart, out defLineEnd, out lineNum, out column, out language, out stackSize, out flags);
+			IDEUtils.FixFilePath(fileName);
+			int hashPos = fileName.IndexOf('#');
+			if (hashPos != -1)
+				fileName.RemoveToEnd(hashPos);
+			if (!FileNameMatches(fileName))
+				return -1;
+			RemapCompiledToActiveLine(hotIdx, ref lineNum, ref column);
+			return lineNum;
+		}
+
         float GetEditX()
         {
 			if ((!gApp.mSettings.mEditorSettings.mShowLineNumbers) || (mEmbedKind != .None))

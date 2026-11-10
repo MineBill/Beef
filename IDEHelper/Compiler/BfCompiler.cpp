@@ -507,12 +507,25 @@ BfCompiler::BfCompiler(BfSystem* bfSystem, bool isResolveOnly)
 
 BfCompiler::~BfCompiler()
 {
+	ClearMethodLocalVarInfos();
 	delete mCeMachine;
 	mCeMachine = NULL;
 	delete mContext;
 	delete mHotData;
 	delete mHotState;
 	delete mHotResolveData;
+}
+
+void BfCompiler::ClearMethodLocalVarInfos()
+{
+	for (auto itr = mMethodLocalVarInfos.begin(); itr != mMethodLocalVarInfos.end(); ++itr)
+	{
+		auto methodLocalVars = itr->mValue;
+		for (auto localInfo : methodLocalVars->mLocalVars)
+			delete localInfo;
+		delete methodLocalVars;
+	}
+	mMethodLocalVarInfos.Clear();
 }
 
 bool BfCompiler::IsTypeAccessible(BfType* checkType, BfProject* curProject)
@@ -7204,6 +7217,8 @@ bool BfCompiler::DoCompile(const StringImpl& outputDirectory)
 
 	// Inc revision for next run through Compile
 	mRevision++;
+	if (!IsHotCompile())
+		ClearMethodLocalVarInfos();
 	mHasComptimeRebuilds = false;
 	int revision = mRevision;
 	BfLogSysM("Compile Start. Revision: %d. HasParser:%d AutoComplete:%d\n", revision,
@@ -9123,6 +9138,102 @@ public:
 	}
 };
 
+BfCompiler::MethodLocalVarInfo* BfCompiler::GetOrCreateMethodLocalVarInfo(BfMethodDef* methodDef)
+{
+	MethodLocalVarInfo* methodLocalVars = NULL;
+	if (!mMethodLocalVarInfos.TryGetValue(methodDef, &methodLocalVars))
+	{
+		methodLocalVars = new MethodLocalVarInfo();
+		methodLocalVars->mFileHash = 0;
+		methodLocalVars->mStartLine = -1;
+		methodLocalVars->mEndLine = -1;
+		methodLocalVars->mRevision = -1;
+		mMethodLocalVarInfos[methodDef] = methodLocalVars;
+	}
+
+	if (methodLocalVars->mRevision != mRevision)
+	{
+		methodLocalVars->mRevision = mRevision;
+		for (auto localInfo : methodLocalVars->mLocalVars)
+			delete localInfo;
+		methodLocalVars->mLocalVars.Clear();
+
+		BfAstNode* bodyNode = methodDef->mBody;
+		if (bodyNode == NULL)
+			bodyNode = methodDef->GetRefNode();
+		BfParserData* bodyParserData = NULL;
+		if (bodyNode != NULL)
+		{
+			BfSourceData* bodySourceData = bodyNode->GetSourceData();
+			if (bodySourceData != NULL)
+				bodyParserData = bodySourceData->ToParserData();
+		}
+
+		if (bodyParserData != NULL)
+		{
+			int startLine = 0;
+			int startColumn = 0;
+			bodyParserData->GetLineCharAtIdx(bodyNode->GetSrcStart(), startLine, startColumn);
+			int endLine = 0;
+			int endColumn = 0;
+			bodyParserData->GetLineCharAtIdx(bodyNode->GetSrcEnd(), endLine, endColumn);
+			methodLocalVars->mFile = bodyParserData->mFileName;
+			methodLocalVars->mFileHash = BfGetFilePathHash(methodLocalVars->mFile);
+			methodLocalVars->mStartLine = startLine;
+			methodLocalVars->mEndLine = endLine;
+		}
+		else
+		{
+			methodLocalVars->mFile.Clear();
+			methodLocalVars->mFileHash = 0;
+			methodLocalVars->mStartLine = -1;
+			methodLocalVars->mEndLine = -1;
+		}
+	}
+
+	return methodLocalVars;
+}
+
+String BfCompiler::GetLocalVariablesAt(const StringImpl& fileName, int line)
+{
+	String result;
+
+	uint64 fileHash = BfGetFilePathHash(fileName);
+	MethodLocalVarInfo* bestMethodLocalVars = NULL;
+	int bestSpan = 0x7FFFFFFF;
+
+	for (auto itr = mMethodLocalVarInfos.begin(); itr != mMethodLocalVarInfos.end(); ++itr)
+	{
+		auto methodLocalVars = itr->mValue;
+		if ((methodLocalVars->mFileHash != fileHash) ||
+			(line < methodLocalVars->mStartLine) ||
+			(line > methodLocalVars->mEndLine))
+			continue;
+		if (!BfFilePathEquals(methodLocalVars->mFile, fileName))
+			continue;
+
+		int span = methodLocalVars->mEndLine - methodLocalVars->mStartLine;
+		if (span < bestSpan)
+		{
+			bestSpan = span;
+			bestMethodLocalVars = methodLocalVars;
+		}
+	}
+
+	if (bestMethodLocalVars == NULL)
+		return result;
+
+	for (auto localInfo : bestMethodLocalVars->mLocalVars)
+	{
+		result += localInfo->mName;
+		result += '\t';
+		result += localInfo->mDeclFile;
+		result += '\t';
+		result += StrFormat("%d\t%d\n", localInfo->mDeclLine, localInfo->mDeclColumn);
+	}
+	return result;
+}
+
 String BfCompiler::GetTypeDefList(bool includeLocation)
 {
 	String result;
@@ -10826,6 +10937,14 @@ BF_EXPORT const char* BF_CALLTYPE BfCompiler_GetTypeDefInfo(BfCompiler* bfCompil
 	String& outString = *gTLStrReturn.Get();
 	outString.clear();
 	outString = bfCompiler->GetTypeDefInfo(typeDefName);
+	return outString.c_str();
+}
+
+BF_EXPORT const char* BF_CALLTYPE BfCompiler_GetLocalVariablesAt(BfCompiler* bfCompiler, const char* fileName, int32 line)
+{
+	String& outString = *gTLStrReturn.Get();
+	outString.clear();
+	outString = bfCompiler->GetLocalVariablesAt(fileName, line);
 	return outString.c_str();
 }
 

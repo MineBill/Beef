@@ -20,6 +20,42 @@
 USING_NS_BF;
 using namespace llvm;
 
+NS_BF_BEGIN
+
+static char BfNormalizePathChar(char c)
+{
+	if (c == '/')
+		c = '\\';
+	if ((c >= 'A') && (c <= 'Z'))
+		c = (char)(c - 'A' + 'a');
+	return c;
+}
+
+uint64 BfGetFilePathHash(const StringImpl& filePath)
+{
+	uint64 hash = 14695981039346656037ULL;
+	for (int i = 0; i < (int)filePath.length(); i++)
+	{
+		hash ^= (uint8)BfNormalizePathChar(filePath[i]);
+		hash *= 1099511628211ULL;
+	}
+	return hash;
+}
+
+bool BfFilePathEquals(const StringImpl& filePathA, const StringImpl& filePathB)
+{
+	if (filePathA.length() != filePathB.length())
+		return false;
+	for (int i = 0; i < (int)filePathA.length(); i++)
+	{
+		if (BfNormalizePathChar(filePathA[i]) != BfNormalizePathChar(filePathB[i]))
+			return false;
+	}
+	return true;
+}
+
+NS_BF_END
+
 #pragma warning(disable:4996)
 
 void Beefy::DoBfLog(int fileIdx, const char* fmt ...)

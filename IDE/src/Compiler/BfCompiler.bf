@@ -136,6 +136,9 @@ namespace IDE.Compiler
 		static extern char8* BfCompiler_GetTypeDefInfo(void* bfCompiler, char8* typeDefName);
 
 		[CallingConvention(.Stdcall), CLink]
+		static extern char8* BfCompiler_GetLocalVariablesAt(void* bfCompiler, char8* fileName, int32 line);
+
+		[CallingConvention(.Stdcall), CLink]
 		static extern char8* BfCompiler_GetTypeInfo(void* bfCompiler, char8* typeName);
 
 		[CallingConvention(.Stdcall), CLink]
@@ -874,6 +877,11 @@ namespace IDE.Compiler
 		public void GetTypeDefInfo(String typeDefName, String outStr)
 		{
 			outStr.Append(BfCompiler_GetTypeDefInfo(mNativeBfCompiler, typeDefName));
+		}
+
+		public void GetLocalVariablesAt(String fileName, int32 line, String outStr)
+		{
+			outStr.Append(BfCompiler_GetLocalVariablesAt(mNativeBfCompiler, fileName, line));
 		}
 
 		public void GetGenericTypeInstances(String typeName, String outStr)

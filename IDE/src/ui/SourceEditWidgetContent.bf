@@ -816,6 +816,26 @@ namespace IDE.ui
             ) ~ delete _;
 		bool mHasCustomColors;
 		FastCursorState mFastCursorState ~ delete _;
+		class DebugInlineValueLine
+		{
+			public int mLine;
+			public String mText = new .() ~ delete _;
+		}
+
+		class DebugDeclPos
+		{
+			public String mName ~ delete _;
+			public String mFile ~ delete _;
+			public int32 mLine;
+			public int32 mColumn;
+		}
+
+		List<DebugInlineValueLine> mDebugInlineValueLines = new .() ~ DeleteContainerAndItems!(_);
+		List<DebugDeclPos> mDebugDeclPositions = new .() ~ DeleteContainerAndItems!(_);
+		int32 mDebugInlineValuesStateIdx = -1;
+		int32 mDebugInlineValuesFrameIdx = -1;
+		int32 mDebugInlineValuesLine = -1;
+		int32 mDebugInlineValuesCompileRevision = -1;
 		public HashSet<int32> mCurParenPairIdSet = new .() ~ delete _;
 		HilitePairedCharState mHilitePairedCharState = .NeedToRecalculate;
 		public Dictionary<int32, CollapseEntry> mCollapseMap = new .() ~ delete _;
@@ -5689,6 +5709,31 @@ namespace IDE.ui
 					DeleteAndNullify!(mFastCursorState);
 				}
 			}
+
+			// Repaint when the debugger stops or switches frames so inline values refresh
+			var app = IDEApp.sApp;
+			if (app.mDebugger != null)
+			{
+				bool paused = app.mExecutionPaused && app.mDebugger.IsPaused();
+				int32 wantStateIdx = paused ? app.mDebugger.mStateIdx : -1;
+				int32 wantFrameIdx = paused ? app.mDebugger.mActiveCallStackIdx : -1;
+				int32 wantCompileRevision = (paused && (app.mBfBuildCompiler != null)) ? app.mBfBuildCompiler.GetCompileRevision() : -1;
+				if ((mDebugInlineValuesStateIdx != wantStateIdx) ||
+					(mDebugInlineValuesFrameIdx != wantFrameIdx) ||
+					(mDebugInlineValuesCompileRevision != wantCompileRevision))
+				{
+					if (!paused)
+					{
+						ClearAndDeleteItems(mDebugInlineValueLines);
+						ClearDebugDeclPositions();
+						mDebugInlineValuesStateIdx = -1;
+						mDebugInlineValuesFrameIdx = -1;
+						mDebugInlineValuesLine = -1;
+						mDebugInlineValuesCompileRevision = -1;
+					}
+					MarkDirty();
+				}
+			}
         }
 
         public override uint32 GetSelectionColor(uint8 flags)
@@ -6229,6 +6274,203 @@ namespace IDE.ui
 			mLineCoordTextVersionId = mData.mCurTextVersionId;
 		}
 
+		void ClearDebugDeclPositions()
+		{
+			ClearAndDeleteItems(mDebugDeclPositions);
+		}
+
+		void RefreshDebugDeclPositions(int stopLine)
+		{
+			ClearDebugDeclPositions();
+
+			var app = IDEApp.sApp;
+			var compiler = app.mBfBuildCompiler;
+			if ((compiler == null) || (mSourceViewPanel == null) || (mSourceViewPanel.mFilePath == null))
+				return;
+			if (compiler.IsPerformingBackgroundOperation())
+				return;
+
+			String result = scope String();
+			var bfSystem = app.mBfBuildSystem;
+			bfSystem.Lock(0);
+			compiler.GetLocalVariablesAt(mSourceViewPanel.mFilePath, (int32)stopLine, result);
+			bfSystem.Unlock();
+
+			for (var lineView in result.Split('\n'))
+			{
+				if (lineView.Length == 0)
+					continue;
+
+				var fields = lineView.Split('\t');
+				StringView name;
+				StringView file;
+				StringView lineStr;
+				StringView columnStr;
+				if (fields.GetNext() case .Ok(let nameVal))
+					name = nameVal;
+				else
+					continue;
+				if (fields.GetNext() case .Ok(let fileVal))
+					file = fileVal;
+				else
+					continue;
+				if (fields.GetNext() case .Ok(let lineVal))
+					lineStr = lineVal;
+				else
+					continue;
+				if (fields.GetNext() case .Ok(let columnVal))
+					columnStr = columnVal;
+				else
+					continue;
+
+				var declPos = new DebugDeclPos();
+				declPos.mName = new String(name);
+				declPos.mFile = new String(file);
+				declPos.mLine = int32.Parse(lineStr).Get();
+				declPos.mColumn = int32.Parse(columnStr).Get();
+				mDebugDeclPositions.Add(declPos);
+			}
+		}
+
+		DebugDeclPos FindDebugDeclPos(StringView name)
+		{
+			for (var declPos in mDebugDeclPositions)
+			{
+				if (declPos.mName.Equals(name))
+					return declPos;
+			}
+			return null;
+		}
+
+		void BuildDebugInlineValues(int stopLine)
+		{
+			ClearAndDeleteItems(mDebugInlineValueLines);
+
+			var debugger = IDEApp.sApp.mDebugger;
+			if (debugger == null)
+				return;
+
+			String autos = scope String();
+			debugger.GetAutoLocals(false, autos);
+
+			int32 count = 0;
+			for (var nameView in autos.Split('\n'))
+			{
+				if (nameView.Length == 0)
+					continue;
+
+				String name = scope String(nameView);
+				if ((name.StartsWith("$")))
+					continue;
+				if (name.StartsWith("@"))
+					continue;
+
+				String val = scope String();
+				debugger.Evaluate(name, val);
+				int newLinePos = val.IndexOf('\n');
+				if (newLinePos != -1)
+					val.RemoveToEnd(newLinePos);
+				val.Trim();
+				if ((val.IsEmpty) || (val.StartsWith("!")))
+					continue;
+
+				if (val.Length > 40)
+				{
+					val.RemoveToEnd(40);
+					val.Append("...");
+				}
+
+				int targetLine = stopLine;
+				var declPos = FindDebugDeclPos(name);
+				if ((declPos != null) && (mSourceViewPanel != null) &&
+					(Path.Equals(declPos.mFile, mSourceViewPanel.mFilePath)))
+					targetLine = declPos.mLine;
+
+				DebugInlineValueLine targetEntry = null;
+				for (var entry in mDebugInlineValueLines)
+				{
+					if (entry.mLine == targetLine)
+					{
+						targetEntry = entry;
+						break;
+					}
+				}
+				if (targetEntry == null)
+				{
+					targetEntry = new DebugInlineValueLine();
+					targetEntry.mLine = targetLine;
+					mDebugInlineValueLines.Add(targetEntry);
+				}
+
+				if (!targetEntry.mText.IsEmpty)
+					targetEntry.mText.Append(", ");
+				targetEntry.mText.Append(name);
+				targetEntry.mText.Append(" = ");
+				targetEntry.mText.Append(val);
+
+				count++;
+				if ((count >= 8) || (targetEntry.mText.Length >= 120))
+					break;
+			}
+		}
+
+		void DrawDebugInlineValues(Graphics g)
+		{
+			if (mSourceViewPanel == null)
+				return;
+
+			var app = IDEApp.sApp;
+			if ((!app.mExecutionPaused) || (app.mDebugger == null) || (!app.mDebugger.IsPaused()))
+				return;
+
+			int line = mSourceViewPanel.GetCurrentDebugLine();
+			if ((line < 0) || (line >= GetLineCount()))
+				return;
+
+			int32 stateIdx = app.mDebugger.mStateIdx;
+			int32 frameIdx = app.mDebugger.mActiveCallStackIdx;
+			int32 compileRevision = (app.mBfBuildCompiler != null) ? app.mBfBuildCompiler.GetCompileRevision() : -1;
+			if ((mDebugInlineValuesStateIdx != stateIdx) ||
+				(mDebugInlineValuesFrameIdx != frameIdx) ||
+				(mDebugInlineValuesLine != line) ||
+				(mDebugInlineValuesCompileRevision != compileRevision))
+			{
+				RefreshDebugDeclPositions(line);
+				BuildDebugInlineValues(line);
+				mDebugInlineValuesStateIdx = stateIdx;
+				mDebugInlineValuesFrameIdx = frameIdx;
+				mDebugInlineValuesLine = (int32)line;
+				mDebugInlineValuesCompileRevision = compileRevision;
+			}
+
+			if (mDebugInlineValueLines.IsEmpty)
+				return;
+
+			float lineSpacing = LineHeight;
+			float textYOffset = GetTextOffset();
+			float offsetY = mTextInsets.mTop;
+			if (mHeight < lineSpacing)
+				offsetY = (mHeight - lineSpacing) * 0.75f;
+
+			using (g.PushTranslate(mTextInsets.mLeft, offsetY))
+			{
+				g.SetFont(mFont);
+				using (g.PushColor(DarkTheme.COLOR_TEXT_DISABLED))
+				{
+					for (var entry in mDebugInlineValueLines)
+					{
+						int valueLine = entry.mLine;
+						if ((valueLine < 0) || (valueLine >= GetLineCount()))
+							continue;
+						String lineText = scope String();
+						GetLineText(valueLine, lineText);
+						float endX = GetTabbedWidth(lineText, 0) + GS!(8);
+						g.DrawString(entry.mText, endX, mLineCoords[valueLine] + textYOffset);
+					}
+				}
+			}
+		}
+
         public override void Draw(Graphics g)
         {
             base.Draw(g);
@@ -6389,6 +6631,8 @@ namespace IDE.ui
 					}
 				}
 			}
+
+			DrawDebugInlineValues(g);
         }
 
 		public override void Resize(float x, float y, float width, float height)

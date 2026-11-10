@@ -16890,6 +16890,45 @@ void BfModule::DoAddLocalVariable(BfLocalVariable* localVar)
 	localVar->mLocalVarIdx = (int)mCurMethodState->mLocals.size();
 	mCurMethodState->mLocals.push_back(localVar);
 
+	if ((localVar->mNameNode != NULL) && (mCurMethodInstance != NULL) && (mCompiler != NULL))
+	{
+		BfMethodDef* methodDef = mCurMethodInstance->mMethodDef;
+		BfSourceData* sourceData = localVar->mNameNode->GetSourceData();
+		BfParserData* parserData = (sourceData != NULL) ? sourceData->ToParserData() : NULL;
+		if ((methodDef != NULL) && (parserData != NULL))
+		{
+			auto methodLocalVars = mCompiler->GetOrCreateMethodLocalVarInfo(methodDef);
+			if ((methodLocalVars != NULL) && (methodLocalVars->mFileHash != 0))
+			{
+				int declLine = 0;
+				int declColumn = 0;
+				parserData->GetLineCharAtIdx(localVar->mNameNode->GetSrcStart(), declLine, declColumn);
+
+				bool alreadyAdded = false;
+				for (auto localInfo : methodLocalVars->mLocalVars)
+				{
+					if ((localInfo->mName == localVar->mName) &&
+						(localInfo->mDeclLine == declLine) &&
+						(localInfo->mDeclColumn == declColumn))
+					{
+						alreadyAdded = true;
+						break;
+					}
+				}
+
+				if (!alreadyAdded)
+				{
+					BfLocalVarInfo* localInfo = new BfLocalVarInfo();
+					localInfo->mName = localVar->mName;
+					localInfo->mDeclFile = parserData->mFileName;
+					localInfo->mDeclLine = declLine;
+					localInfo->mDeclColumn = declColumn;
+					methodLocalVars->mLocalVars.Add(localInfo);
+				}
+			}
+		}
+	}
+
 	BfLocalVarEntry* localVarEntryPtr;
 	if (!mCurMethodState->mLocalVarSet.TryAdd(BfLocalVarEntry(localVar), &localVarEntryPtr))
 	{

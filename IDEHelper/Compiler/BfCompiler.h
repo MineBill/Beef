@@ -369,6 +369,19 @@ public:
 
 	Array<BfVDataModule*> mVDataModules;
 
+	struct MethodLocalVarInfo
+	{
+		String mFile;
+		uint64 mFileHash;
+		int mStartLine;
+		int mEndLine;
+		int mRevision;
+		Array<BfLocalVarInfo*> mLocalVars;
+	};
+	Dictionary<BfMethodDef*, MethodLocalVarInfo*> mMethodLocalVarInfos;
+	MethodLocalVarInfo* GetOrCreateMethodLocalVarInfo(BfMethodDef* methodDef);
+	void ClearMethodLocalVarInfos();
+
 	BfTypeDef* mBfObjectTypeDef;
 	BfTypeDef* mChar32TypeDef;
 	BfTypeDef* mFloatTypeDef;
@@ -581,6 +594,7 @@ public:
 	String GetTypeDefMatches(const StringImpl& searchSrc, bool includeLocation);
 	void GetTypeDefs(const StringImpl& typeName, Array<BfTypeDef*>& typeDefs);
 	String GetTypeDefInfo(const StringImpl& typeName);
+	String GetLocalVariablesAt(const StringImpl& fileName, int line);
 	int GetTypeId(const StringImpl& typeName);
 	BfType* GetType(const StringImpl& typeName);
 	int GetEmitSource(const StringImpl& fileName, StringImpl* outBuffer);
