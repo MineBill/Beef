@@ -200,6 +200,7 @@ namespace IDE
 
 		public WidgetWindow mMainWindow;
 		public DarkDockingFrame mDockingFrame;
+		public ToolWindowDock mToolWindowDock;
 		public MainFrame mMainFrame;
 		public GlobalUndoManager mGlobalUndoManager = new GlobalUndoManager() ~ delete _;
 		public GitManager mGitManager = new .() ~ delete _;
@@ -739,6 +740,9 @@ namespace IDE
 
 		public virtual void DeletePanels()
 		{
+			// Drop the tool window references before the panels they point at are deleted
+			mToolWindowDock?.ClearPanels();
+
 			mixin RemoveAndDelete(var widget)
 			{
 				Widget.RemoveAndDelete(widget);
@@ -1991,6 +1995,12 @@ namespace IDE
 				SerializeDockingFrame(sd, mDockingFrame, false);
 			}
 
+			using (sd.CreateObject("ToolWindows"))
+			{
+				if (mToolWindowDock != null)
+					mToolWindowDock.SerializeLayout(sd);
+			}
+
 			String projectUserFileName = scope String();
 			GetDefaultLayoutDataFileName(projectUserFileName);
 			String dataStr = scope String();
@@ -2034,6 +2044,12 @@ namespace IDE
 			using (sd.CreateObject("MainDockingFrame"))
 			{
 				SerializeDockingFrame(sd, mDockingFrame, true);
+			}
+
+			using (sd.CreateObject("ToolWindows"))
+			{
+				if (mToolWindowDock != null)
+					mToolWindowDock.SerializeLayout(sd);
 			}
 
 			using (sd.CreateArray("RecentFilesList"))
@@ -2695,6 +2711,7 @@ namespace IDE
 			if (!mRunningTestScript)
 			{
 				mActiveDocumentsTabbedView = null;
+				mToolWindowDock?.CloseAllTools();
 				WithStandardPanels(scope (panel) =>
 					{
 						ResetPanel(panel);
@@ -3577,6 +3594,15 @@ namespace IDE
 					continue;
 				Debug.Assert(panel != null);
 
+				// Older layout files stored tool windows as normal tabs - move them into the
+				//  corner dock instead of recreating them as document tabs
+				if ((mToolWindowDock != null) && (mToolWindowDock.IsToolPanel(panel)))
+				{
+					if (data.GetBool("Active"))
+						mToolWindowDock.ShowToolPanel(panel);
+					continue;
+				}
+
 				bool isActive = data.GetBool("Active");
 
 				var newTabButton = new ContentTabButton();
@@ -3627,6 +3653,14 @@ namespace IDE
 						{
 							tabbedView = CreateTabbedView();
 							DeserializeTabbedView(data, tabbedView);
+
+							if ((tabbedView.GetTabCount() == 0) && (tabbedView != mActiveDocumentsTabbedView))
+							{
+								// All tabs were tool windows which moved to the tool window dock
+								BFApp.sApp.DeferDelete(tabbedView);
+								continue;
+							}
+
 							dockedWidget = tabbedView;
 						}
 
@@ -3697,6 +3731,12 @@ namespace IDE
 
 			using (data.Open("MainDockingFrame"))
 				DeserializeDockingFrame(data, mDockingFrame);
+
+			if (mToolWindowDock != null)
+			{
+				using (data.Open("ToolWindows"))
+					mToolWindowDock.DeserializeLayout(data);
+			}
 
 			ClearAndDeleteItems(mRecentlyDisplayedFiles);
 			for ( data.Enumerate("RecentFilesList"))
@@ -5407,7 +5447,16 @@ namespace IDE
 			if (setFocus)
 				mLastActivePanel = panel;
 			RecordHistoryLocation();
-			ShowTab(panel, label, false, setFocus, isDocument);
+
+			if ((!isDocument) && (mToolWindowDock != null) && (mToolWindowDock.ShowToolPanel(panel)))
+			{
+				// Shown in a tool window corner
+			}
+			else
+			{
+				ShowTab(panel, label, false, setFocus, isDocument);
+			}
+
 			if (setFocus)
 				panel.FocusForKeyboard();
 
@@ -5645,6 +5694,7 @@ namespace IDE
 			if (!mRunningTestScript)
 			{
 				mActiveDocumentsTabbedView = null;
+				mToolWindowDock?.CloseAllTools();
 				WithStandardPanels(scope (panel) =>
 					{
 						ResetPanel(panel);
@@ -6690,7 +6740,7 @@ namespace IDE
 
 					while ((focusWidget != null) && (focusWidget.mParent != null))
 					{
-						if (focusWidget.mParent is TabbedView)
+						if ((focusWidget.mParent is TabbedView) || (focusWidget.mParent is ToolWindowPane))
 							return focusWidget;
 						focusWidget = focusWidget.mParent;
 					}
@@ -13240,6 +13290,15 @@ namespace IDE
 
 		void ShowPanel(Widget panel, bool setFocus = true)
 		{
+			// Tool windows aren't tabs - only reveal tool windows which are already open
+			if ((mToolWindowDock != null) && (mToolWindowDock.IsToolPanel(panel)))
+			{
+				var tool = mToolWindowDock.FindTool(panel);
+				if ((setFocus) && (tool.mIsOpen))
+					panel.SetFocus();
+				return;
+			}
+
 			WithTabs(scope (tab) =>
 				{
 					if (tab.mContent == panel)
@@ -13389,42 +13448,14 @@ namespace IDE
 				return;
 			}
 
-			bool docOnlyView = false;
-
-			TabbedView projectTabbedView = CreateTabbedView();
-			SetupTab(projectTabbedView, "Workspace", 0, mProjectPanel, false);
-			projectTabbedView.SetRequestedSize(GS!(200), GS!(200));
-			projectTabbedView.mWidth = GS!(200);
-
-			//TabbedView propertiesView = CreateTabbedView();
-			//propertiesView.AddTab("Properties", 0, mPropertiesPanel, false);
-			//propertiesView.SetRequestedSize(250, 250);
-
-			if (!docOnlyView)
+			// Workspace on the left and Output below, just like the standard tool window layout
+			if (mToolWindowDock != null)
 			{
-				mDockingFrame.AddDockedWidget(projectTabbedView, null, DockingFrame.WidgetAlign.Left);
-				EnsureDocumentArea();
-				//mDockingFrame.AddDockedWidget(propertiesView, null, DockingFrame.WidgetAlign.Right);
+				mToolWindowDock.OpenTool(mToolWindowDock.FindTool("Workspace"));
+				mToolWindowDock.OpenTool(mToolWindowDock.FindTool("Output"));
 			}
 
-			var outputTabbedView = CreateTabbedView();
-			mDockingFrame.AddDockedWidget(outputTabbedView, null, DockingFrame.WidgetAlign.Bottom);
-			outputTabbedView.SetRequestedSize(GS!(250), GS!(250));
-
-			SetupTab(outputTabbedView, "Output", GS!(150), mOutputPanel, false);
-			SetupTab(outputTabbedView, "Immediate", GS!(150), mImmediatePanel, false);
-			//outputTabbedView.AddTab("Find Results", 150, mFindResultsPanel, false);
-
-			var watchTabbedView = CreateTabbedView();
-			watchTabbedView.SetRequestedSize(GS!(250), GS!(250));
-			mDockingFrame.AddDockedWidget(watchTabbedView, outputTabbedView, DockingFrame.WidgetAlign.Left);
-
-			SetupTab(watchTabbedView, "Auto", 150, mAutoWatchPanel, false);
-			SetupTab(watchTabbedView, "Watch", 150, mWatchPanel, false);
-			SetupTab(watchTabbedView, "Memory", 150, mMemoryPanel, false);
-
-			SetupTab(outputTabbedView, "Call Stack", 150, mCallStackPanel, false);
-			SetupTab(outputTabbedView, "Threads", 150, mThreadPanel, false);
+			EnsureDocumentArea();
 		}
 
 		protected void CreateBfSystems()
@@ -13596,6 +13627,39 @@ namespace IDE
 			mBookmarksPanel.mAutoDelete = false;
 		}
 
+		/// Registers all tool windows with the rider-style corner dock. The corner here is the
+		///  default location - the user can drag the tool icons to other corners.
+		public virtual void CreateToolWindows()
+		{
+			if (mToolWindowDock == null)
+				return;
+
+			mToolWindowDock.RegisterTool("Workspace", "Workspace", .Workspace, .TopLeft, mProjectPanel);
+			mToolWindowDock.RegisterTool("ClassView", "Class View", .ClassView, .TopLeft, mClassViewPanel);
+
+			mToolWindowDock.RegisterTool("Bookmarks", "Bookmarks", .Bookmarks, .TopRight, mBookmarksPanel);
+
+			mToolWindowDock.RegisterTool("Output", "Output", .Output, .BottomLeft, mOutputPanel);
+			mToolWindowDock.RegisterTool("Immediate", "Immediate", .Immediate, .BottomLeft, mImmediatePanel);
+#if BF_PLATFORM_WINDOWS
+			mToolWindowDock.RegisterTool("Terminal", "Terminal", .Terminal, .BottomLeft, mTerminalPanel);
+			mToolWindowDock.RegisterTool("Console", "Console", .Console, .BottomLeft, mConsolePanel);
+#endif
+
+			mToolWindowDock.RegisterTool("Errors", "Errors", .Errors, .BottomRight, mErrorsPanel);
+			mToolWindowDock.RegisterTool("FindResults", "Find Results", .FindResults, .BottomRight, mFindResultsPanel);
+			mToolWindowDock.RegisterTool("Watch", "Watch", .Watch, .BottomRight, mWatchPanel);
+			mToolWindowDock.RegisterTool("AutoWatch", "Auto Watches", .AutoWatch, .BottomRight, mAutoWatchPanel);
+			mToolWindowDock.RegisterTool("Memory", "Memory", .Memory, .BottomRight, mMemoryPanel);
+			mToolWindowDock.RegisterTool("CallStack", "Call Stack", .CallStack, .BottomRight, mCallStackPanel);
+			mToolWindowDock.RegisterTool("Breakpoints", "Breakpoints", .Breakpoints, .BottomRight, mBreakpointPanel);
+			mToolWindowDock.RegisterTool("Diagnostics", "Diagnostics", .Diagnostics, .BottomRight, mDiagnosticsPanel);
+			mToolWindowDock.RegisterTool("Modules", "Modules", .Modules, .BottomRight, mModulePanel);
+			mToolWindowDock.RegisterTool("Threads", "Threads", .Threads, .BottomRight, mThreadPanel);
+			mToolWindowDock.RegisterTool("Profile", "Profile", .Profile, .BottomRight, mProfilePanel);
+			mToolWindowDock.RegisterTool("Autocomplete", "Autocomplete", .Immediate, .BottomRight, mAutoCompletePanel);
+		}
+
 		public override void Init()
 		{
 			scope AutoBeefPerf("IDEApp.Init");
@@ -13683,6 +13747,7 @@ namespace IDE
 
 			mMainFrame = new MainFrame();
 			mDockingFrame = mMainFrame.mDockingFrame;
+			mToolWindowDock = mMainFrame.mToolDock;
 
 			mSquiggleImage = Image.LoadFromFile(scope String(mInstallDir, "images/Squiggle.png"));
 			mCircleImage = Image.LoadFromFile(scope String(mInstallDir, "images/Circle.png"));
@@ -13697,6 +13762,7 @@ namespace IDE
 			}
 
 			CreatePanels();
+			CreateToolWindows();
 
 			GetVersionInfo(var exeDate);
 			let localExeDate = exeDate.ToLocalTime();
@@ -16226,7 +16292,8 @@ namespace IDE
 			{
 				// Detach terminal if the panel is closed
 				var terminalTabButton = GetTab(mTerminalPanel);
-				if (terminalTabButton == null)
+				bool isToolShown = (mToolWindowDock != null) && (mToolWindowDock.IsToolOpen(mTerminalPanel));
+				if ((terminalTabButton == null) && (!isToolShown))
 				{
 					mTerminalPanel.Detach();
 				}

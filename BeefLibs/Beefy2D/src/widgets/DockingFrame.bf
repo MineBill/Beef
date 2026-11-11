@@ -561,22 +561,33 @@ namespace Beefy.widgets
             return -1;
         }
 
+        static DockingFrame FindDockingFrame(Widget widget)
+        {
+            if (widget == null)
+                return null;
+
+            DockingFrame dockingFrame = widget as DockingFrame;
+            if (dockingFrame != null)
+                return dockingFrame;
+
+            if (widget.mChildWidgets != null)
+            {
+                for (var child in widget.mChildWidgets)
+                {
+                    dockingFrame = FindDockingFrame(child);
+                    if (dockingFrame != null)
+                        return dockingFrame;
+                }
+            }
+            return null;
+        }
+
         DockingFrame GetDockingFrame(WidgetWindow widgetWindow)
         {
             if (widgetWindow == null)
                 return null;
 
-            DockingFrame dockingFrame = widgetWindow.mRootWidget as DockingFrame;
-            if (dockingFrame != null)
-                return dockingFrame;
-            
-            for (var child in widgetWindow.mRootWidget.mChildWidgets)
-            {
-                dockingFrame = child as DockingFrame;
-                if (dockingFrame != null)
-                    return dockingFrame;
-            }
-            return null;
+            return FindDockingFrame(widgetWindow.mRootWidget);
         }
 
         public virtual void ShowDragTarget(IDockable draggingItem)
@@ -766,6 +777,12 @@ namespace Beefy.widgets
 			MarkDirty();
             HideDragTargets();
 
+			// The coordinates come from the window root, but we may be nested inside another
+			//  widget (such as the tool window dock) so we need our own local coordinates
+			float localX;
+			float localY;
+			RootToSelfTranslate(x, y, out localX, out localY);
+
 			if ((y < 0) && (y >= -6) && (x >= 0) && (x < mWidgetWindow.mWindowWidth))
 			{
 				containingFrame = this;
@@ -779,7 +796,7 @@ namespace Beefy.widgets
 				return;
 			}	
 
-            if (FindDragTarget(draggingItem, x, y, ref containingFrame, ref refWidget, ref align, ref customDock))
+            if (FindDragTarget(draggingItem, localX, localY, ref containingFrame, ref refWidget, ref align, ref customDock))
             {
                 containingFrame.mDraggingDock = draggingItem;
                 containingFrame.mDraggingRef = refWidget;
