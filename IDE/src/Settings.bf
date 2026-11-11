@@ -323,11 +323,20 @@ namespace IDE
 			public Color mText = 0xFFFFFFFF;
 			public Color mTextDisabled = 0xFFA8A8A8;
 			public Color mTextSelected = 0xFF2f5c88;
+
+#region Button
+			public Color mButton = 0x0;
+			public Color mButtonActive = 0x0;
+			public Color mButtonHover = 0x0;
+			public Color mButtonDisabled = 0x0;
+#endregion
+
 			public Color mWindow = 0xFF44444D;
 			public Color mDialogOutlineIn = 0xFF404040;
 			public Color mDialogOutlineOut = 0xFF202020;
 			public Color mGrid = 0x0CFFFFFF;
 			public Color mBackground = 0xFF1C1C24;
+			public Color mBackgroundAlt = 0xFF1C1C24;
 			public Color mSelectedOutline = 0xFFCFAE11;
 			public Color mMenuFocused = 0xFFE5A910;
 			public Color mMenuSelected = 0xFFCB9B80;
@@ -384,11 +393,18 @@ namespace IDE
 				GetColor("Text", ref mText);
 				GetColor("TextDisabled", ref mTextDisabled);
 				GetColor("TextSelected", ref mTextSelected);
+
+				GetColor("Button", ref mButton);
+				GetColor("ButtonActive", ref mButtonActive);
+				GetColor("ButtonHover", ref mButtonHover);
+				GetColor("ButtonDisabled", ref mButtonDisabled);
+
 				GetColor("Window", ref mWindow);
 				GetColor("DialogOutlineIn", ref mDialogOutlineIn);
 				GetColor("DialogOutlineOut", ref mDialogOutlineOut);
 				GetColor("Grid", ref mGrid);
 				GetColor("Background", ref mBackground);
+				GetColor("BackgroundAlt", ref mBackgroundAlt);
 				GetColor("SelectedOutline", ref mSelectedOutline);
 				GetColor("MenuFocused", ref mMenuFocused);
 				GetColor("MenuSelected", ref mMenuSelected);
@@ -488,6 +504,7 @@ namespace IDE
 				DarkTheme.COLOR_DIALOG_OUTLINE_OUT = mDialogOutlineOut;
 				DarkTheme.COLOR_GRID = mGrid;
 				DarkTheme.COLOR_BKG = mBackground;
+				DarkTheme.COLOR_BKG_ALT = mBackgroundAlt;
 				DarkTheme.COLOR_SELECTED_OUTLINE = mSelectedOutline;
 				DarkTheme.COLOR_MENU_FOCUSED = mMenuFocused;
 				DarkTheme.COLOR_MENU_SELECTED = mMenuSelected;

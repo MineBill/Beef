@@ -290,7 +290,7 @@ namespace IDE.ui
             bool atError = gApp.mDebugger.GetRunState() == DebugManager.RunState.Exception;
 			var debugState = gApp.mDebugger.GetRunState();
 
-            uint32 bkgColor = 0xFF404040;
+            uint32 bkgColor = DarkTheme.COLOR_BKG;
             if (atError)
                 bkgColor = 0xFF800000;
             if (gApp.IsCompiling)

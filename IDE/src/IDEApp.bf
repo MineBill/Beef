@@ -2711,6 +2711,7 @@ namespace IDE
 			if (!mRunningTestScript)
 			{
 				mActiveDocumentsTabbedView = null;
+				mToolWindowDock?.ResetDocumentArea();
 				mToolWindowDock?.CloseAllTools();
 				WithStandardPanels(scope (panel) =>
 					{

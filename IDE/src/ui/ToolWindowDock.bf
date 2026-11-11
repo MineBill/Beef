@@ -16,11 +16,11 @@ Rider-style tool window docking.
 
 The main window is divided into four tool "corners":
 
-    +---------------------------+---------------------------+
-    | [TL][TR] tool strips are on the left and right window |
-    |      edges. Each strip has a top cluster and a bottom |
-    |      cluster of tool icons.                           |
-    +-------------------------------------------------------+
+	+---------------------------+---------------------------+
+	| [TL][TR] tool strips are on the left and right window |
+	|      edges. Each strip has a top cluster and a bottom |
+	|      cluster of tool icons.                           |
+	+-------------------------------------------------------+
 
   TopLeft      - a tool pane docked to the left side, full height
   TopRight     - a tool pane docked to the right side, full height
@@ -651,9 +651,9 @@ public class ToolWindowDock : Widget
 			RootToSelfTranslate(mWidgetWindow.mMouseX, mWidgetWindow.mMouseY, out x, out y);
 
 			float iconSize = GS!(16);
-			using (g.PushColor(0xC0202028))
+			using (g.PushColor(0xC0202028)) // @Todo: Proper color
 				g.FillRect(x - iconSize * 0.5f - GS!(4), y - iconSize * 0.5f - GS!(4), iconSize + GS!(8), iconSize + GS!(8));
-			using (g.PushColor(0xFFFFFFFF))
+			using (g.PushColor(0xFFFFFFFF)) // @Todo: Proper color
 				g.OutlineRect(x - iconSize * 0.5f - GS!(4), y - iconSize * 0.5f - GS!(4), iconSize + GS!(8), iconSize + GS!(8), GS!(1));
 			DrawIcon(g, mDraggingTool.mIcon, x - iconSize * 0.5f, y - iconSize * 0.5f, iconSize, 0xFFFFFFFF);
 		}
@@ -740,6 +740,7 @@ public class ToolWindowDock : Widget
 		return true;
 	}
 
+	// @Todo: This entire thing needs to go..
 	public static void DrawIcon(Graphics g, ToolWindowIcon icon, float x, float y, float size, Color color)
 	{
 		using (g.PushColor(color))
@@ -970,16 +971,17 @@ public class ToolWindowStrip : Widget
 
 	public override void Draw(Graphics g)
 	{
-		using (g.PushColor(0xFF1E1E22))
+		using (g.PushColor(DarkTheme.COLOR_BKG))
 			g.FillRect(0, 0, mWidth, mHeight);
 
-		using (g.PushColor(0xFF38383E))
-		{
-			if (mIsLeft)
-				g.FillRect(mWidth - GS!(1), 0, GS!(1), mHeight);
-			else
-				g.FillRect(0, 0, GS!(1), mHeight);
-		}
+
+		// using (g.PushColor(DarkTheme.COLOR_TEXT_DISABLED))
+		// {
+		// 	if (mIsLeft)
+		// 		g.FillRect(mWidth - GS!(1), 0, GS!(1), mHeight);
+		// 	else
+		// 		g.FillRect(0, 0, GS!(1), mHeight);
+		// }
 
 		// Highlight the corner the dragged icon would be dropped on
 		if ((mDock.mDraggingTool != null) && (mDock.mDropCorner != .None) && (ContainsCorner(mDock.mDropCorner)))
@@ -1016,14 +1018,22 @@ public class ToolIconButton : Widget, IDragInterface
 	{
 		if (mTool.mIsOpen)
 		{
-			using (g.PushColor(((mMouseOver) || (mMouseDown)) ? 0xFF34343C : 0xFF2C2C33))
+			let active = mMouseOver || mMouseDown;
+			using (g.PushColor(active ? DarkTheme.COLOR_BUTTON_HOVER : DarkTheme.COLOR_BUTTON))
 				g.FillRect(0, 0, mWidth, mHeight);
 			using (g.PushColor(DarkTheme.COLOR_SELECTED_OUTLINE))
-				g.FillRect(0, 0, GS!(2), mHeight);
+			{
+				let corner = mTool.mCorner;
+				let width = GS!(4);
+				if (corner == .BottomRight || corner == .TopRight)
+					g.FillRect(0, 0, width, mHeight);
+				else
+					g.FillRect(mWidth - width, 0, width, mHeight);
+			}
 		}
 		else if (mMouseOver)
 		{
-			using (g.PushColor(0x22FFFFFF))
+			using (g.PushColor(0x22AAAAAA))
 				g.FillRect(0, 0, mWidth, mHeight);
 		}
 
@@ -1031,9 +1041,9 @@ public class ToolIconButton : Widget, IDragInterface
 		float iconX = (mWidth - iconSize) * 0.5f;
 		float iconY = (mHeight - iconSize) * 0.5f;
 		if (mTool.mIsOpen)
-			ToolWindowDock.DrawIcon(g, mTool.mIcon, iconX, iconY, iconSize, 0xFFFFFFFF);
+			ToolWindowDock.DrawIcon(g, mTool.mIcon, iconX, iconY, iconSize, DarkTheme.COLOR_TEXT);
 		else
-			ToolWindowDock.DrawIcon(g, mTool.mIcon, iconX, iconY, iconSize, 0xFFB4B4BC);
+			ToolWindowDock.DrawIcon(g, mTool.mIcon, iconX, iconY, iconSize, DarkTheme.COLOR_TEXT_DISABLED);
 	}
 
 	public override void MouseDown(float x, float y, int32 btn, int32 btnCount)
@@ -1156,7 +1166,7 @@ public class ToolWindowPane : Widget
 
 	public override void Draw(Graphics g)
 	{
-		using (g.PushColor(DarkTheme.COLOR_BKG))
+		using (g.PushColor(DarkTheme.COLOR_BKG_ALT))
 			g.FillRect(0, 0, mWidth, mHeight);
 
 		if (mTool == null)
@@ -1168,7 +1178,7 @@ public class ToolWindowPane : Widget
 		using (g.PushColor(DarkTheme.COLOR_TEXT))
 			g.DrawString(mTool.mLabel, GS!(8), (headerHeight - g.mFont.GetLineSpacing()) * 0.5f, .Left, mWidth - GS!(30), .Ellipsis);
 
-		using (g.PushColor(0xFF44444C))
+		using (g.PushColor(DarkTheme.COLOR_TEXT_DISABLED))
 			g.FillRect(0, headerHeight - GS!(1), mWidth, GS!(1));
 	}
 }
