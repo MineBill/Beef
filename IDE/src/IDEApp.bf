@@ -5449,8 +5449,10 @@ namespace IDE
 				mLastActivePanel = panel;
 			RecordHistoryLocation();
 
-			if ((!isDocument) && (mToolWindowDock != null) && (mToolWindowDock.ShowToolPanel(panel)))
+			if (!isDocument && mToolWindowDock != null)
 			{
+				if (!mToolWindowDock.ToggleTool(mToolWindowDock.FindTool(panel)))
+					return;
 				// Shown in a tool window corner
 			}
 			else

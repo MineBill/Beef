@@ -291,19 +291,21 @@ public class ToolWindowDock : Widget
 		return true;
 	}
 
-	public void ToggleTool(ToolWindow tool)
+	public bool ToggleTool(ToolWindow tool)
 	{
 		if (tool == null)
-			return;
+			return false;
 
 		if (tool.mIsOpen)
 		{
 			CloseTool(tool);
+			return false;
 		}
 		else
 		{
 			OpenTool(tool);
 			tool.mPanel?.FocusForKeyboard();
+			return true;
 		}
 	}
 
