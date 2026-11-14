@@ -195,11 +195,12 @@ namespace Beefy.theme.dark
         {
             base.Draw(g);
 
-            using (g.PushColor(0x80000000))
-                g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.DropShadow), 0, 0, mWidth + cShadowSize, mHeight + cShadowSize);
+            float radius = DarkTheme.SURFACE_RADIUS * DarkTheme.sScale;
+            g.FillRoundedRectShadow(0, 0, mWidth, mHeight, radius,
+                DarkTheme.SHADOW_RADIUS * DarkTheme.sScale, DarkTheme.COLOR_SHADOW);
 
-            using (g.PushColor(0xFFFFFFFF))
-                g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.Menu), 0, 0, mWidth, mHeight);
+            using (g.PushColor(DarkTheme.COLOR_MENU))
+                g.FillRoundedRect(0, 0, mWidth, mHeight, radius);
 
             g.SetFont(mFont);
 			using (g.PushColor(DarkTheme.COLOR_TEXT))

@@ -121,19 +121,14 @@ namespace Beefy.theme.dark
                     drawWidth = mWidth;*/
                 float drawWidth = mWidth;
 
-                Image image = null;
-                if (mIsActive)
-                    image = (mMouseOver || mMouseDown) ? DarkTheme.sDarkTheme.mImages[(int32)DarkTheme.ImageIdx.TabActiveOver] : DarkTheme.sDarkTheme.mImages[(int32)DarkTheme.ImageIdx.TabActive];
-                else
-                    image = ((!mIsEndTab) && (mMouseOver || mMouseDown)) ? DarkTheme.sDarkTheme.mImages[(int32)DarkTheme.ImageIdx.TabInactiveOver] : DarkTheme.sDarkTheme.mImages[(int32)DarkTheme.ImageIdx.TabInactive];
-                g.DrawButton(image, 0, 0, drawWidth + 1);
+                bool isHover = (mMouseOver || mMouseDown);
+                uint32 tabColor = mIsActive ? DarkTheme.COLOR_TAB_ACTIVE :
+                    (isHover ? DarkTheme.COLOR_TAB_HOVER : DarkTheme.COLOR_TAB_INACTIVE);
+                float radius = DarkTheme.SURFACE_RADIUS * DarkTheme.sScale;
 
-				if ((mIsActive) && (DarkTheme.sScale != 1.0f))
-				{
-					// When scaling, we can end up with a subpixel we don't want
-					//using (g.PushColor(0xFFFF0000))
-						g.DrawButton(DarkTheme.sDarkTheme.mWindowTopImage, GS!(2), (float)Math.Ceiling(DarkTheme.sScale * (20)) - 1, drawWidth - GS!(4));
-				}
+                // Tabs meet the body below them, so only the top corners are rounded.
+                using (g.PushColor(tabColor))
+                    g.FillRoundedRect(0, 0, drawWidth + 1, mHeight, radius, radius, 0, 0);
 
                 g.SetFont(DarkTheme.sDarkTheme.mSmallFont);
                 if ((mLabel != null) && (drawWidth > GS!(16)))
@@ -456,9 +451,10 @@ namespace Beefy.theme.dark
         public override void Draw(Graphics g)
         {
             base.Draw(g);
-            using (g.PushColor(0x80FFFFFF))
-                g.DrawButton(DarkTheme.sDarkTheme.mImages[(int32)DarkTheme.ImageIdx.TabInactive], 0, 0, mWidth);
-            g.DrawBox(DarkTheme.sDarkTheme.mImages[(int32)DarkTheme.ImageIdx.Window], 0, mTabHeight - GS!(2), mWidth, mHeight - mTabHeight + GS!(2));
+            using (g.PushColor(DarkTheme.COLOR_TAB_STRIP))
+                g.FillRect(0, 0, mWidth, mTabHeight);
+            using (g.PushColor(DarkTheme.COLOR_WINDOW))
+                g.FillRect(0, mTabHeight - GS!(2), mWidth, mHeight - mTabHeight + GS!(2));
         }
 
         protected override void ResizeTabs(bool immediate)
@@ -783,12 +779,12 @@ namespace Beefy.theme.dark
         
         public virtual void DrawDockPreview(Graphics g, TabButton tabButton)
         {
-            using (g.PushColor(0x80FFFFFF))
-            {                    
-                g.DrawBox(DarkTheme.sDarkTheme.mImages[(int32)DarkTheme.ImageIdx.Window], 0, mTabHeight - GS!(2), mWidth, mHeight - mTabHeight + GS!(2));   
+            using (g.PushColor(DarkTheme.COLOR_WINDOW))
+            {
+                g.FillRect(0, mTabHeight - GS!(2), mWidth, mHeight - mTabHeight + GS!(2));
                 using (g.PushTranslate(tabButton.mX, tabButton.mY))
                     tabButton.Draw(g);
-            }            
+            }
         }
     }
 }

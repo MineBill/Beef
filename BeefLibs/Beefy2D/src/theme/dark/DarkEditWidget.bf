@@ -1553,12 +1553,14 @@ namespace Beefy.theme.dark
 
             if (mDrawBox)
             {
-                g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.EditBox), 0, 0, mWidth, mHeight);
-                if (mHasFocus)
-                {
-                    using (g.PushColor(DarkTheme.COLOR_SELECTED_OUTLINE))
-                        g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.Outline), 0, 0, mWidth, mHeight);
-                }
+                float radius = DarkTheme.SURFACE_RADIUS * DarkTheme.sScale;
+                float borderWidth = DarkTheme.SURFACE_BORDER_WIDTH * DarkTheme.sScale;
+
+                using (g.PushColor(DarkTheme.COLOR_EDITBOX))
+                    g.FillRoundedRect(0, 0, mWidth, mHeight, radius);
+
+                using (g.PushColor(mHasFocus ? DarkTheme.COLOR_SELECTED_OUTLINE : DarkTheme.COLOR_SURFACE_BORDER))
+                    g.OutlineRoundedRect(0, 0, mWidth, mHeight, radius, borderWidth);
             }
 
 			/*using (g.PushColor(0x40FF0000))

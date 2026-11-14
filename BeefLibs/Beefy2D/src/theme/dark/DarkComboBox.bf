@@ -95,16 +95,23 @@ namespace Beefy.theme.dark
         {
             base.Draw(g);
             
+            float radius = DarkTheme.SURFACE_RADIUS * DarkTheme.sScale;
+            float borderWidth = DarkTheme.SURFACE_BORDER_WIDTH * DarkTheme.sScale;
+
             float yOfs = 0;
             if (mEditWidget != null)
             {
-                g.DrawBox(DarkTheme.sDarkTheme.GetImage(.EditBox), 0, 0, mWidth, mHeight);
+                using (g.PushColor(DarkTheme.COLOR_EDITBOX))
+                    g.FillRoundedRect(0, 0, mWidth, mHeight, radius);
+                using (g.PushColor(DarkTheme.COLOR_SURFACE_BORDER))
+                    g.OutlineRoundedRect(0, 0, mWidth, mHeight, radius, borderWidth);
+
                 g.Draw(DarkTheme.sDarkTheme.mImages[(int32)DarkTheme.ImageIdx.ComboEnd], mWidth - GS!(25), (mHeight - GS!(22)) / 2 + yOfs);
 
                 if ((mHasFocus) || (mEditWidget.mHasFocus))
                 {
                     using (g.PushColor(DarkTheme.COLOR_SELECTED_OUTLINE))
-                        g.DrawBox(DarkTheme.sDarkTheme.GetImage(.Outline), 0, 0, mWidth, mHeight);
+                        g.OutlineRoundedRect(0, 0, mWidth, mHeight, radius, borderWidth);
                 }
 
                 return;
@@ -112,8 +119,8 @@ namespace Beefy.theme.dark
 
             if ((mFrameKind == .OnWindow) || (mFrameKind == .Frameless))
             {
-                Image texture = DarkTheme.sDarkTheme.mImages[(mFrameKind == .OnWindow) ? (int32)DarkTheme.ImageIdx.ComboBox : (int32)DarkTheme.ImageIdx.ComboBoxFrameless];
-                g.DrawBox(texture, 0, GS!(-2), mWidth, mHeight);
+                using (g.PushColor(DarkTheme.COLOR_EDITBOX))
+                    g.FillRoundedRect(0, GS!(-2), mWidth, mHeight, radius);
             }
             else
             {

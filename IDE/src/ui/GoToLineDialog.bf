@@ -93,7 +93,8 @@ namespace IDE.ui
 			if (!mIsValid)
 			{
 				using (g.PushColor(0xFFFF0000))
-					g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.Outline), mEditWidget.mX, mEditWidget.mY, mEditWidget.mWidth, mEditWidget.mHeight);
+					g.OutlineRoundedRect(mEditWidget.mX, mEditWidget.mY, mEditWidget.mWidth, mEditWidget.mHeight,
+						DarkTheme.SURFACE_RADIUS * DarkTheme.sScale, DarkTheme.SURFACE_BORDER_WIDTH * DarkTheme.sScale);
 			}
 		}
 

@@ -67,19 +67,29 @@ namespace Beefy.theme.dark
 			if (mDrawDownPct > 0)
 				drawDown = true;
 
-            Image texture = drawDown ? DarkTheme.sDarkTheme.mImages[(int32)DarkTheme.ImageIdx.BtnDown] :
-                mMouseOver ? DarkTheme.sDarkTheme.mImages[(int32)DarkTheme.ImageIdx.BtnOver] :
-                DarkTheme.sDarkTheme.mImages[(int32)DarkTheme.ImageIdx.BtnUp];
-
+            uint32 fillColor;
             if (mDisabled)
-                texture = DarkTheme.sDarkTheme.mImages[(int32)DarkTheme.ImageIdx.BtnUp];
+                fillColor = DarkTheme.COLOR_SURFACE_DISABLED;
+            else if (drawDown)
+                fillColor = DarkTheme.COLOR_SURFACE_PRESSED;
+            else if (mMouseOver)
+                fillColor = DarkTheme.COLOR_SURFACE_HOVER;
+            else
+                fillColor = DarkTheme.COLOR_SURFACE;
 
-            g.DrawBox(texture, 0, 0, mWidth, mHeight);
+            float radius = DarkTheme.SURFACE_RADIUS * DarkTheme.sScale;
+            float borderWidth = DarkTheme.SURFACE_BORDER_WIDTH * DarkTheme.sScale;
+
+            using (g.PushColor(fillColor))
+                g.FillRoundedRect(0, 0, mWidth, mHeight, radius);
+
+            using (g.PushColor(DarkTheme.COLOR_SURFACE_BORDER))
+                g.OutlineRoundedRect(0, 0, mWidth, mHeight, radius, borderWidth);
 
             if ((mHasFocus) && (!mDisabled))
             {
                 using (g.PushColor(DarkTheme.COLOR_SELECTED_OUTLINE))
-                    g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.Outline), 0, 0, mWidth, mHeight);
+                    g.OutlineRoundedRect(0, 0, mWidth, mHeight, radius, borderWidth);
             }
 
             g.SetFont(DarkTheme.sDarkTheme.mSmallFont);

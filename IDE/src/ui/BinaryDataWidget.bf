@@ -1141,7 +1141,8 @@ namespace IDE.ui
 
             using (g.PushClip(0, GS!(mColumnHeaderHeight) + GS!(2), mWidth, mHeight - GS!(mColumnHeaderHeight) - GS!(4)))
             {
-                g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.EditBox), 0, GS!(mColumnHeaderHeight), mWidth, mHeight - GS!(mColumnHeaderHeight));
+                using (g.PushColor(DarkTheme.COLOR_EDITBOX))
+                    g.FillRect(0, GS!(mColumnHeaderHeight), mWidth, mHeight - GS!(mColumnHeaderHeight));
 
 				if ((!mNoTrackedExprs) && (!gApp.mDebugger.mIsRunning))
 					return;

@@ -176,11 +176,12 @@ namespace IDE.ui
 
 			public override void DrawAll(Graphics g)
 			{
-				using (g.PushColor(0x80000000))
-				    g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.DropShadow), 0, 0, mWidth + GS!(8), mHeight + GS!(8));
+				float radius = DarkTheme.SURFACE_RADIUS * DarkTheme.sScale;
+				g.FillRoundedRectShadow(0, 0, mWidth + GS!(8), mHeight + GS!(8), radius,
+					DarkTheme.SHADOW_RADIUS * DarkTheme.sScale, DarkTheme.COLOR_SHADOW);
 
-				using (g.PushColor(0xFFFFFFFF))
-				    g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.Menu), 0, 0, mWidth, mHeight);
+				using (g.PushColor(DarkTheme.COLOR_MENU))
+				    g.FillRoundedRect(0, 0, mWidth, mHeight, radius);
 
 				using (g.PushClip(0, 0, mWidth - GS!(3), mHeight))
 					base.DrawAll(g);

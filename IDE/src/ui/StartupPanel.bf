@@ -59,7 +59,8 @@ namespace IDE.ui
 
 			public override void Draw(Graphics g)
 			{
-				g.DrawBox(DarkTheme.sDarkTheme.GetImage(.EditBox), 0, GS!(-30), mWidth, mHeight + GS!(30));
+				using (g.PushColor(DarkTheme.COLOR_EDITBOX))
+					g.FillRect(0, GS!(-30), mWidth, mHeight + GS!(30));
 
 				g.SetFont(mTitleFont);
 
@@ -90,8 +91,9 @@ namespace IDE.ui
 			{
 				if (mMouseOver)
 				{
-					using (g.PushColor(gApp.mSettings.mUISettings.mColors.mSelectedOutline))
-						g.DrawBox(DarkTheme.sDarkTheme.GetImage(.MenuSelect), GS!(2), GS!(2), mWidth - GS!(2), mHeight - GS!(4));
+					using (g.PushColor(gApp.mSettings.mUISettings.mColors.mMenuSelected))
+						g.FillRoundedRect(GS!(2), GS!(2), mWidth - GS!(2), mHeight - GS!(4),
+							DarkTheme.SURFACE_RADIUS * DarkTheme.sScale);
 					/*using (g.PushColor(0x80000000))
 						g.FillRect(0, 0, mWidth, mHeight);*/
 					

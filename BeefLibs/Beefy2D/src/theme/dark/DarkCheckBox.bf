@@ -96,22 +96,15 @@ namespace Beefy.theme.dark
         {
             base.Draw(g);
 
-            if (mLargeFormat)
-            {
-                g.Draw(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.CheckboxLarge));
-            }
-            else
-            {
-                if (mMouseOver)
-                {
-                    if (mMouseDown)
-                        g.Draw(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.CheckboxDown));
-                    else
-                        g.Draw(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.CheckboxOver));
-                }
-                else
-                    g.Draw(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.Checkbox));
-            }
+            float radius = DarkTheme.SURFACE_RADIUS * DarkTheme.sScale * 0.5f;
+            float borderWidth = DarkTheme.SURFACE_BORDER_WIDTH * DarkTheme.sScale;
+
+            uint32 boxColor = mMouseOver ? (mMouseDown ? DarkTheme.COLOR_SURFACE_PRESSED : DarkTheme.COLOR_SURFACE_HOVER) : DarkTheme.COLOR_EDITBOX;
+
+            using (g.PushColor(boxColor))
+                g.FillRoundedRect(0, 0, mWidth, mHeight, radius);
+            using (g.PushColor(DarkTheme.COLOR_SURFACE_BORDER))
+                g.OutlineRoundedRect(0, 0, mWidth, mHeight, radius, borderWidth);
 
             if (mState == .Checked)
                 g.Draw(mCheckIcon);
@@ -121,7 +114,7 @@ namespace Beefy.theme.dark
 			if (mHasFocus)
 			{
 			    using (g.PushColor(DarkTheme.COLOR_SELECTED_OUTLINE))
-			        g.DrawButton(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.Outline), 0, 0, mWidth);
+			        g.OutlineRoundedRect(0, 0, mWidth, mHeight, radius, borderWidth);
 			}
 
             if (mLabel != null)

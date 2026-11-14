@@ -818,8 +818,8 @@ namespace IDE.ui
         public override void Draw(Beefy.gfx.Graphics g)
         {                        
             base.Draw(g);
-            using (g.PushColor(0xFFFFFFFF))
-                g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.Menu), 0, 0, mWidth - GS!(8), mHeight - GS!(8));
+            using (g.PushColor(DarkTheme.COLOR_MENU))
+                g.FillRoundedRect(0, 0, mWidth - GS!(8), mHeight - GS!(8), DarkTheme.SURFACE_RADIUS * DarkTheme.sScale);
         }
 
         public override void DrawAll(Beefy.gfx.Graphics g)
@@ -835,7 +835,7 @@ namespace IDE.ui
 
             if ((!mFoundMatches) && (!String.IsNullOrWhiteSpace(findText)))
             {
-                using (g.PushColor(0xFFFF0000))
+                using (g.PushColor(gApp.mSettings.mUISettings.mColors.mError))
                     g.OutlineRect(mFindEditWidget.mX, mFindEditWidget.mY, mFindEditWidget.mWidth, mFindEditWidget.mHeight);
             }
 

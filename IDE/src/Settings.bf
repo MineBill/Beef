@@ -324,12 +324,24 @@ namespace IDE
 			public Color mTextDisabled = 0xFFA8A8A8;
 			public Color mTextSelected = 0xFF2f5c88;
 
-#region Button
-			public Color mButton = 0x0;
-			public Color mButtonActive = 0x0;
-			public Color mButtonHover = 0x0;
-			public Color mButtonDisabled = 0x0;
-#endregion
+			// Procedural surfaces. The legacy Button/ButtonActive/ButtonHover/ButtonDisabled keys feed
+			// the button fills, so existing themes keep working.
+			public Color mSurface = 0xFF3C3C44;
+			public Color mSurfaceHover = 0xFF484851;
+			public Color mSurfacePressed = 0xFF2F2F36;
+			public Color mSurfaceDisabled = 0xFF35353B;
+			public Color mSurfaceBorder = 0xFF1C1C20;
+			public Color mTabActive = 0xFF303038;
+			public Color mTabInactive = 0xFF222228;
+			public Color mTabHover = 0xFF3A3A43;
+			public Color mTabStrip = 0xFF1E1E24;
+			public Color mEditBox = 0xFF2B2B31;
+			public Color mMenuBkg = 0xFF2A2A30;
+			public Color mPanelHeader = 0xFF33333A;
+			public Color mScrollbar = 0xFF202026;
+			public Color mScrollbarThumb = 0xFF4A4A55;
+			public Color mScrollbarThumbHover = 0xFF5C5C68;
+			public Color mShadow = 0x60000000;
 
 			public Color mWindow = 0xFF44444D;
 			public Color mDialogOutlineIn = 0xFF404040;
@@ -394,10 +406,26 @@ namespace IDE
 				GetColor("TextDisabled", ref mTextDisabled);
 				GetColor("TextSelected", ref mTextSelected);
 
-				GetColor("Button", ref mButton);
-				GetColor("ButtonActive", ref mButtonActive);
-				GetColor("ButtonHover", ref mButtonHover);
-				GetColor("ButtonDisabled", ref mButtonDisabled);
+				GetColor("Button", ref mSurface);
+				GetColor("ButtonActive", ref mSurfacePressed);
+				GetColor("ButtonHover", ref mSurfaceHover);
+				GetColor("ButtonDisabled", ref mSurfaceDisabled);
+				GetColor("Surface", ref mSurface);
+				GetColor("SurfaceHover", ref mSurfaceHover);
+				GetColor("SurfacePressed", ref mSurfacePressed);
+				GetColor("SurfaceDisabled", ref mSurfaceDisabled);
+				GetColor("SurfaceBorder", ref mSurfaceBorder);
+				GetColor("TabActive", ref mTabActive);
+				GetColor("TabInactive", ref mTabInactive);
+				GetColor("TabHover", ref mTabHover);
+				GetColor("TabStrip", ref mTabStrip);
+				GetColor("EditBox", ref mEditBox);
+				GetColor("Menu", ref mMenuBkg);
+				GetColor("PanelHeader", ref mPanelHeader);
+				GetColor("Scrollbar", ref mScrollbar);
+				GetColor("ScrollbarThumb", ref mScrollbarThumb);
+				GetColor("ScrollbarThumbHover", ref mScrollbarThumbHover);
+				sd.Get("Shadow", ref *(int32*)&mShadow);
 
 				GetColor("Window", ref mWindow);
 				GetColor("DialogOutlineIn", ref mDialogOutlineIn);
@@ -510,6 +538,23 @@ namespace IDE
 				DarkTheme.COLOR_MENU_SELECTED = mMenuSelected;
 				DarkTheme.COLOR_CURRENT_LINE_HILITE = mCurrentLineHilite;
 				DarkTheme.COLOR_CHAR_PAIR_HILITE = mCharPairHilite;
+
+				DarkTheme.COLOR_SURFACE = mSurface;
+				DarkTheme.COLOR_SURFACE_HOVER = mSurfaceHover;
+				DarkTheme.COLOR_SURFACE_PRESSED = mSurfacePressed;
+				DarkTheme.COLOR_SURFACE_DISABLED = mSurfaceDisabled;
+				DarkTheme.COLOR_SURFACE_BORDER = mSurfaceBorder;
+				DarkTheme.COLOR_TAB_ACTIVE = mTabActive;
+				DarkTheme.COLOR_TAB_INACTIVE = mTabInactive;
+				DarkTheme.COLOR_TAB_HOVER = mTabHover;
+				DarkTheme.COLOR_TAB_STRIP = mTabStrip;
+				DarkTheme.COLOR_EDITBOX = mEditBox;
+				DarkTheme.COLOR_MENU = mMenuBkg;
+				DarkTheme.COLOR_PANEL_HEADER = mPanelHeader;
+				DarkTheme.COLOR_SCROLLBAR = mScrollbar;
+				DarkTheme.COLOR_SCROLLBAR_THUMB = mScrollbarThumb;
+				DarkTheme.COLOR_SCROLLBAR_THUMB_HOVER = mScrollbarThumbHover;
+				DarkTheme.COLOR_SHADOW = mShadow;
 			}
 		}
 

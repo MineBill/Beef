@@ -1290,6 +1290,313 @@ namespace Beefy.gfx
 				Gfx_SetDrawVertex(v + 5, outerX[next], outerY[next], 0, 0.5f, 0.5f, edgeColor);
 			}
 		}
+
+		// Rounded rects are tessellated: a triangle fan out to the inner edge plus a one-pixel alpha
+		// fringe, the same construction FillOval uses. They draw from mWhiteDot like FillRect, so they
+		// batch with plain fills, and all of the geometry is built in pixel space so the fade stays one
+		// pixel wide under a scaled mMatrix. Radii are in the same units as width/height.
+		const int32 MAX_ROUND_POINTS = 56;
+		// Scratch ring reused by FillRoundedRect/OutlineRoundedRect. Arrays (not fixed buffers) so the
+		// helpers can take spans of them; allocated once per Graphics.
+		float[] mRoundPX = new float[MAX_ROUND_POINTS] ~ delete _;
+		float[] mRoundPY = new float[MAX_ROUND_POINTS] ~ delete _;
+		float[] mRoundPGrad = new float[MAX_ROUND_POINTS] ~ delete _;
+		float[] mRoundPNormX = new float[MAX_ROUND_POINTS] ~ delete _;
+		float[] mRoundPNormY = new float[MAX_ROUND_POINTS] ~ delete _;
+
+		// Corner order is TL, TR, BR, BL, which walks the perimeter clockwise on a Y-down screen.
+		// grad[] carries a 0..1 position along the box's Y axis, for gradient fills.
+		int32 BuildRoundedRing(float x, float y, float width, float height,
+			float radiusTL, float radiusTR, float radiusBR, float radiusBL,
+			Span<float> px, Span<float> py, Span<float> grad)
+		{
+			Matrix m = mMatrix;
+			float ox = m.tx + m.a * x + m.c * y;
+			float oy = m.ty + m.b * x + m.d * y;
+
+			float maxRadius = Math.Min(width, height) * 0.5f;
+			float useTL = Math.Clamp(radiusTL, 0.0f, maxRadius);
+			float useTR = Math.Clamp(radiusTR, 0.0f, maxRadius);
+			float useBR = Math.Clamp(radiusBR, 0.0f, maxRadius);
+			float useBL = Math.Clamp(radiusBL, 0.0f, maxRadius);
+
+			float[4] useRadius = .(useTL, useTR, useBR, useBL);
+			float[4] ccx = .(useTL, width - useTR, width - useBR, useBL);
+			float[4] ccy = .(useTL, useTR, height - useBR, height - useBL);
+			float[4] angStart = .(Math.PI_f, Math.PI_f * 1.5f, 0f, Math.PI_f * 0.5f);
+			float[4] cornerX = .(0f, width, width, 0f);
+			float[4] cornerY = .(0f, 0f, height, height);
+
+			float sx = Math.Sqrt(m.a * m.a + m.b * m.b);
+			float sy = Math.Sqrt(m.c * m.c + m.d * m.d);
+
+			int32 count = 0;
+			for (int32 corner = 0; corner < 4; corner++)
+			{
+				float radius = useRadius[corner];
+				int32 segs = 0;
+				float pixelRadius = radius * Math.Max(sx, sy);
+				if (pixelRadius > 0.25f)
+					segs = Math.Clamp((int32)(pixelRadius * 0.7f) + 1, 2, 12);
+
+				if (segs == 0)
+				{
+					// Square corner: one point, so the fringe normal comes out of the ring bisector.
+					float lx = cornerX[corner];
+					float ly = cornerY[corner];
+					px[count] = ox + m.a * lx + m.c * ly;
+					py[count] = oy + m.b * lx + m.d * ly;
+					grad[count] = ly / height;
+					count++;
+					continue;
+				}
+
+				for (int32 i = 0; i <= segs; i++)
+				{
+					float ang = angStart[corner] + (i * (Math.PI_f * 0.5f)) / segs;
+					float lx = ccx[corner] + Math.Cos(ang) * radius;
+					float ly = ccy[corner] + Math.Sin(ang) * radius;
+					px[count] = ox + m.a * lx + m.c * ly;
+					py[count] = oy + m.b * lx + m.d * ly;
+					grad[count] = ly / height;
+					count++;
+				}
+			}
+			return count;
+		}
+
+		// Per-point outward normals from the ring's own edges (angle bisector), flipped so they point
+		// away from the shape center. Works for arcs and square corners alike.
+		void BuildRoundedRingNormals(Span<float> px, Span<float> py, int32 count,
+			float centerX, float centerY, Span<float> nx, Span<float> ny)
+		{
+			for (int32 i = 0; i < count; i++)
+			{
+				int32 prevIdx = (i == 0) ? (count - 1) : (i - 1);
+				int32 nextIdx = (i == (count - 1)) ? 0 : (i + 1);
+
+				float prevDx = px[i] - px[prevIdx];
+				float prevDy = py[i] - py[prevIdx];
+				float nextDx = px[nextIdx] - px[i];
+				float nextDy = py[nextIdx] - py[i];
+				float prevLen = Math.Sqrt(prevDx * prevDx + prevDy * prevDy);
+				float nextLen = Math.Sqrt(nextDx * nextDx + nextDy * nextDy);
+
+				nx[i] = 0;
+				ny[i] = 0;
+				if ((prevLen == 0) || (nextLen == 0))
+					continue;
+
+				float tx = prevDx / prevLen + nextDx / nextLen;
+				float ty = prevDy / prevLen + nextDy / nextLen;
+				float len = Math.Sqrt(tx * tx + ty * ty);
+				if (len == 0)
+					continue;
+
+				tx /= len;
+				ty /= len;
+
+				float outX = ty;
+				float outY = -tx;
+				if ((outX * (px[i] - centerX) + outY * (py[i] - centerY)) < 0)
+				{
+					outX = -outX;
+					outY = -outY;
+				}
+				nx[i] = outX;
+				ny[i] = outY;
+			}
+		}
+
+		public void FillRoundedRect(float x, float y, float width, float height, float radius)
+		{
+			FillRoundedRect(x, y, width, height, radius, radius, radius, radius, Color.White, Color.White);
+		}
+
+		public void FillRoundedRect(float x, float y, float width, float height,
+			float radiusTL, float radiusTR, float radiusBR, float radiusBL)
+		{
+			FillRoundedRect(x, y, width, height, radiusTL, radiusTR, radiusBR, radiusBL, Color.White, Color.White);
+		}
+
+		// colorTop/colorBottom are modulated by mColor (pass Color.White to just use mColor).
+		public void FillRoundedRect(float x, float y, float width, float height, float radius,
+			Color colorTop, Color colorBottom)
+		{
+			FillRoundedRect(x, y, width, height, radius, radius, radius, radius, colorTop, colorBottom);
+		}
+
+		public void FillRoundedRect(float x, float y, float width, float height,
+			float radiusTL, float radiusTR, float radiusBR, float radiusBL,
+			Color colorTop, Color colorBottom)
+		{
+			if ((width <= 0) || (height <= 0))
+				return;
+
+			Span<float> px = mRoundPX;
+			Span<float> py = mRoundPY;
+			Span<float> grad = mRoundPGrad;
+			Span<float> nx = mRoundPNormX;
+			Span<float> ny = mRoundPNormY;
+
+			int32 count = BuildRoundedRing(x, y, width, height, radiusTL, radiusTR, radiusBR, radiusBL,
+				px, py, grad);
+			if (count == 0)
+				return;
+
+			Matrix m = mMatrix;
+			float centerLocalX = x + width * 0.5f;
+			float centerLocalY = y + height * 0.5f;
+			float centerX = m.tx + m.a * centerLocalX + m.c * centerLocalY;
+			float centerY = m.ty + m.b * centerLocalX + m.d * centerLocalY;
+			BuildRoundedRingNormals(px, py, count, centerX, centerY, nx, ny);
+
+			Color topColor = (colorTop == Color.White) ? mColor : Color.Mult(mColor, colorTop);
+			Color bottomColor = (colorBottom == Color.White) ? mColor : Color.Mult(mColor, colorBottom);
+			Color centerColor = Color.Lerp(topColor, bottomColor, 0.5f);
+
+			// A shape under a pixel thick can't inset a full half pixel without its sides crossing.
+			float inset = Math.Min(0.5f, Math.Min(width, height) * 0.25f);
+
+			Gfx_AllocTris(mWhiteDot.mNativeTextureSegment, count * 9);
+
+			int32 vtx = 0;
+			for (int32 i = 0; i < count; i++)
+			{
+				int32 nextIdx = (i == (count - 1)) ? 0 : (i + 1);
+
+				float innerX = px[i] - nx[i] * inset;
+				float innerY = py[i] - ny[i] * inset;
+				float nextInnerX = px[nextIdx] - nx[nextIdx] * inset;
+				float nextInnerY = py[nextIdx] - ny[nextIdx] * inset;
+
+				Color color = Color.Lerp(topColor, bottomColor, grad[i]);
+				Color nextColor = Color.Lerp(topColor, bottomColor, grad[nextIdx]);
+				Color edgeColor = color;
+				edgeColor.A = 0;
+				Color nextEdgeColor = nextColor;
+				nextEdgeColor.A = 0;
+
+				// Solid interior: fan from the center out to the inner edge.
+				Gfx_SetDrawVertex(vtx + 0, centerX, centerY, 0, 0.5f, 0.5f, centerColor);
+				Gfx_SetDrawVertex(vtx + 1, innerX, innerY, 0, 0.5f, 0.5f, color);
+				Gfx_SetDrawVertex(vtx + 2, nextInnerX, nextInnerY, 0, 0.5f, 0.5f, nextColor);
+				vtx += 3;
+
+				// One-pixel fade from the inner edge out to the true outline.
+				float outerX = px[i] + nx[i] * 0.5f;
+				float outerY = py[i] + ny[i] * 0.5f;
+				float nextOuterX = px[nextIdx] + nx[nextIdx] * 0.5f;
+				float nextOuterY = py[nextIdx] + ny[nextIdx] * 0.5f;
+
+				Gfx_SetDrawVertex(vtx + 0, innerX, innerY, 0, 0.5f, 0.5f, color);
+				Gfx_SetDrawVertex(vtx + 1, outerX, outerY, 0, 0.5f, 0.5f, edgeColor);
+				Gfx_SetDrawVertex(vtx + 2, nextInnerX, nextInnerY, 0, 0.5f, 0.5f, nextColor);
+				Gfx_SetDrawVertex(vtx + 3, nextInnerX, nextInnerY, 0, 0.5f, 0.5f, nextColor);
+				Gfx_SetDrawVertex(vtx + 4, outerX, outerY, 0, 0.5f, 0.5f, edgeColor);
+				Gfx_SetDrawVertex(vtx + 5, nextOuterX, nextOuterY, 0, 0.5f, 0.5f, nextEdgeColor);
+				vtx += 6;
+			}
+		}
+
+		// Soft drop shadow: a few expanding rounded rects with a low alpha each, so the accumulated
+		// coverage fades out over `spread` pixels. Draw the surface itself afterwards, on top.
+		public void FillRoundedRectShadow(float x, float y, float width, float height, float radius,
+			float spread, Color color)
+		{
+			if ((width <= 0) || (height <= 0) || (spread <= 0) || (color.A == 0))
+				return;
+
+			const int32 cLayers = 4;
+			Color layerColor = color;
+			layerColor.A = (uint8)Math.Max(1, (int32)color.A / (cLayers + 1));
+
+			using (PushColor(layerColor))
+			{
+				for (int32 i = cLayers; i >= 1; i--)
+				{
+					float grow = spread * i / cLayers;
+					FillRoundedRect(x - grow, y - grow, width + grow * 2, height + grow * 2, radius + grow);
+				}
+			}
+		}
+
+		// Border drawn inside the rect, like OutlineRect, with a fade on both sides.
+		public void OutlineRoundedRect(float x, float y, float width, float height, float radius, float thickness = 1)
+		{
+			if ((width <= 0) || (height <= 0) || (thickness <= 0))
+				return;
+
+			Span<float> px = mRoundPX;
+			Span<float> py = mRoundPY;
+			Span<float> grad = mRoundPGrad;
+			Span<float> nx = mRoundPNormX;
+			Span<float> ny = mRoundPNormY;
+
+			int32 count = BuildRoundedRing(x, y, width, height, radius, radius, radius, radius,
+				px, py, grad);
+			if (count == 0)
+				return;
+
+			Matrix m = mMatrix;
+			float centerLocalX = x + width * 0.5f;
+			float centerLocalY = y + height * 0.5f;
+			float centerX = m.tx + m.a * centerLocalX + m.c * centerLocalY;
+			float centerY = m.ty + m.b * centerLocalX + m.d * centerLocalY;
+			BuildRoundedRingNormals(px, py, count, centerX, centerY, nx, ny);
+
+			Color edgeColor = mColor;
+			edgeColor.A = 0;
+
+			Gfx_AllocTris(mWhiteDot.mNativeTextureSegment, count * 18);
+
+			int32 vtx = 0;
+			for (int32 i = 0; i < count; i++)
+			{
+				int32 nextIdx = (i == (count - 1)) ? 0 : (i + 1);
+
+				// Ring point is the outer border edge; the band runs inward.
+				float bandX = px[i] - nx[i] * thickness;
+				float bandY = py[i] - ny[i] * thickness;
+				float nextBandX = px[nextIdx] - nx[nextIdx] * thickness;
+				float nextBandY = py[nextIdx] - ny[nextIdx] * thickness;
+
+				float outerX = px[i] + nx[i] * 0.5f;
+				float outerY = py[i] + ny[i] * 0.5f;
+				float nextOuterX = px[nextIdx] + nx[nextIdx] * 0.5f;
+				float nextOuterY = py[nextIdx] + ny[nextIdx] * 0.5f;
+
+				float innerX = bandX - nx[i] * 0.5f;
+				float innerY = bandY - ny[i] * 0.5f;
+				float nextInnerX = nextBandX - nx[nextIdx] * 0.5f;
+				float nextInnerY = nextBandY - ny[nextIdx] * 0.5f;
+
+				// Fade in, solid band, fade out.
+				Gfx_SetDrawVertex(vtx + 0, outerX, outerY, 0, 0.5f, 0.5f, edgeColor);
+				Gfx_SetDrawVertex(vtx + 1, px[i], py[i], 0, 0.5f, 0.5f, mColor);
+				Gfx_SetDrawVertex(vtx + 2, nextOuterX, nextOuterY, 0, 0.5f, 0.5f, edgeColor);
+				Gfx_SetDrawVertex(vtx + 3, nextOuterX, nextOuterY, 0, 0.5f, 0.5f, edgeColor);
+				Gfx_SetDrawVertex(vtx + 4, px[i], py[i], 0, 0.5f, 0.5f, mColor);
+				Gfx_SetDrawVertex(vtx + 5, px[nextIdx], py[nextIdx], 0, 0.5f, 0.5f, mColor);
+				vtx += 6;
+
+				Gfx_SetDrawVertex(vtx + 0, px[i], py[i], 0, 0.5f, 0.5f, mColor);
+				Gfx_SetDrawVertex(vtx + 1, bandX, bandY, 0, 0.5f, 0.5f, mColor);
+				Gfx_SetDrawVertex(vtx + 2, px[nextIdx], py[nextIdx], 0, 0.5f, 0.5f, mColor);
+				Gfx_SetDrawVertex(vtx + 3, px[nextIdx], py[nextIdx], 0, 0.5f, 0.5f, mColor);
+				Gfx_SetDrawVertex(vtx + 4, bandX, bandY, 0, 0.5f, 0.5f, mColor);
+				Gfx_SetDrawVertex(vtx + 5, nextBandX, nextBandY, 0, 0.5f, 0.5f, mColor);
+				vtx += 6;
+
+				Gfx_SetDrawVertex(vtx + 0, bandX, bandY, 0, 0.5f, 0.5f, mColor);
+				Gfx_SetDrawVertex(vtx + 1, innerX, innerY, 0, 0.5f, 0.5f, edgeColor);
+				Gfx_SetDrawVertex(vtx + 2, nextBandX, nextBandY, 0, 0.5f, 0.5f, mColor);
+				Gfx_SetDrawVertex(vtx + 3, nextBandX, nextBandY, 0, 0.5f, 0.5f, mColor);
+				Gfx_SetDrawVertex(vtx + 4, innerX, innerY, 0, 0.5f, 0.5f, edgeColor);
+				Gfx_SetDrawVertex(vtx + 5, nextInnerX, nextInnerY, 0, 0.5f, 0.5f, edgeColor);
+				vtx += 6;
+			}
+		}
     }
 #else
     public class Graphics : GraphicsBase
@@ -1621,6 +1928,47 @@ namespace Beefy.gfx
         public void PolyVertexCopy(int idx, int srcIdx)
         {
             //TODO:Implement
+        }
+
+        // Studio clients forward their draw calls to the host, so the tessellated versions degrade to
+        // plain rects here. Only the entry points the theme layer uses are mirrored.
+        public void FillRoundedRect(float x, float y, float width, float height, float radius)
+        {
+            FillRect(x, y, width, height);
+        }
+
+        public void FillRoundedRect(float x, float y, float width, float height,
+            float radiusTL, float radiusTR, float radiusBR, float radiusBL)
+        {
+            FillRect(x, y, width, height);
+        }
+
+        public void FillRoundedRect(float x, float y, float width, float height, float radius,
+            Color colorTop, Color colorBottom)
+        {
+            FillRectGradient(x, y, width, height, colorTop, colorTop, colorBottom, colorBottom);
+        }
+
+        public void FillRoundedRect(float x, float y, float width, float height,
+            float radiusTL, float radiusTR, float radiusBR, float radiusBL,
+            Color colorTop, Color colorBottom)
+        {
+            FillRectGradient(x, y, width, height, colorTop, colorTop, colorBottom, colorBottom);
+        }
+
+        public void OutlineRoundedRect(float x, float y, float width, float height, float radius, float thickness = 1)
+        {
+            FillRect(x, y, width, thickness);
+            FillRect(x, y + thickness, thickness, height - thickness * 2);
+            FillRect(x + width - thickness, y + thickness, thickness, height - thickness * 2);
+            FillRect(x, y + height - thickness, width, thickness);
+        }
+
+        public void FillRoundedRectShadow(float x, float y, float width, float height, float radius,
+            float spread, Color color)
+        {
+            float grow = spread * 0.5f;
+            FillRect(x - grow, y - grow, width + grow * 2, height + grow * 2);
         }
     }
 #endif

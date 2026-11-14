@@ -141,7 +141,8 @@ namespace IDE.ui
 					float height = g.mFont.GetWrapHeight(str, width);
 
 					using (g.PushColor(0xFFA0A0A0))
-						g.DrawBox(DarkTheme.sDarkTheme.GetImage(.Window), -GS!(1), -height - GS!(12), mWidth + GS!(2), height + GS!(13));
+						g.FillRoundedRect(-GS!(1), -height - GS!(12), mWidth + GS!(2), height + GS!(13),
+							DarkTheme.SURFACE_RADIUS * DarkTheme.sScale);
 
 					g.DrawString(str, GS!(8), -height - GS!(7), .Left, width, .Wrap);
 				}

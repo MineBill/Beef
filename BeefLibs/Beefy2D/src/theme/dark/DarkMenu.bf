@@ -27,7 +27,10 @@ namespace Beefy.theme.dark
 				return;
 
             if (mMenuItem.mLabel == null)
-                g.DrawButton(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.MenuSepHorz), GS!(28), 0, mWidth - GS!(32));
+            {
+                using (g.PushColor(DarkTheme.COLOR_SURFACE_BORDER))
+                    g.FillRect(GS!(28), 0, mWidth - GS!(32), DarkTheme.SURFACE_BORDER_WIDTH * DarkTheme.sScale);
+            }
             else
             {
 				let darkMenuWidget = (DarkMenuWidget)mMenuWidget;
@@ -44,11 +47,10 @@ namespace Beefy.theme.dark
 						leftStr.RemoveToEnd(barIdx);
 					}
 
-					//g.DrawString(leftStr, GS!(36), 0);
-					DarkTheme.DrawUnderlined(g, leftStr, GS!(36), 0);
+					DarkTheme.DrawUnderlined(g, leftStr, GS!(30), GS!(-2));
 
 					if (!rightStr.IsEmpty)
-						g.DrawString(rightStr, mWidth - GS!(8), 0, .Right);
+						g.DrawString(rightStr, mWidth - GS!(8), GS!(-2), .Right);
 				}
 
                 if (mMenuItem.mIconImage != null)
@@ -190,12 +192,13 @@ namespace Beefy.theme.dark
         {
             base.Draw(g);
 
-            using (g.PushColor(0x80000000))
-                g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.DropShadow), GS!(2), mDrawY + GS!(2), mWidth - GS!(2), mDrawHeight - GS!(2));
+            float radius = DarkTheme.SURFACE_RADIUS * DarkTheme.sScale;
+            g.FillRoundedRectShadow(0, mDrawY, mWidth - GS!(8), mDrawHeight - GS!(8),
+                radius, DarkTheme.SHADOW_RADIUS * DarkTheme.sScale, DarkTheme.COLOR_SHADOW);
 
             base.Draw(g);
-            using (g.PushColor(0xFFFFFFFF))
-                g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.Menu), 0, mDrawY, mWidth - GS!(8), mDrawHeight - GS!(8));
+            using (g.PushColor(DarkTheme.COLOR_MENU))
+                g.FillRoundedRect(0, mDrawY, mWidth - GS!(8), mDrawHeight - GS!(8), radius);
         }
 
         public override void DrawAll(Graphics g)
@@ -359,7 +362,8 @@ namespace Beefy.theme.dark
 					return;
 
             float mDrawHeight = mHeight;
-            g.DrawButtonVert(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.MenuSepVert), GS!(18), GS!(2), mDrawHeight - GS!(4));
+            using (g.PushColor(DarkTheme.COLOR_SURFACE_BORDER))
+                g.FillRect(GS!(18), GS!(2), DarkTheme.SURFACE_BORDER_WIDTH * DarkTheme.sScale, mDrawHeight - GS!(4));
 
             g.SetFont(mFont);
             for (int32 itemIdx = 0; itemIdx < mItemWidgets.Count; itemIdx++)
@@ -372,7 +376,8 @@ namespace Beefy.theme.dark
                 if (itemIdx == mSelectIdx)
                 {
                     using (g.PushColor(DarkTheme.COLOR_MENU_FOCUSED))
-                        g.DrawButton(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.MenuSelect), GS!(4), curY, mWidth - GS!(6));
+                        g.FillRoundedRect(GS!(4), curY, mWidth - GS!(10), mItemSpacing - GS!(2),
+                            DarkTheme.SURFACE_RADIUS * DarkTheme.sScale);
                 }
 
                 //if (item.mMenu.mLabel != null)

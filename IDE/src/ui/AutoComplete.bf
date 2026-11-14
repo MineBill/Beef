@@ -374,12 +374,13 @@ namespace IDE.ui
 				
 				if (mOwnsWindow)
 				{
-	                using (g.PushColor(0x80000000))
-	                    g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.DropShadow), GS!(2), GS!(2), boxWidth, drawHeight - GS!(2));
+					float popupRadius = DarkTheme.SURFACE_RADIUS * DarkTheme.sScale;
+	                g.FillRoundedRectShadow(GS!(2), GS!(2), boxWidth, drawHeight - GS!(2), popupRadius,
+						DarkTheme.SHADOW_RADIUS * DarkTheme.sScale, DarkTheme.COLOR_SHADOW);
 
 	                base.Draw(g);
-	                using (g.PushColor(0xFFFFFFFF))
-	                    g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.Menu), 0, 0, boxWidth - GS!(6), drawHeight - GS!(8));
+	                using (g.PushColor(DarkTheme.COLOR_MENU))
+	                    g.FillRoundedRect(0, 0, boxWidth - GS!(6), drawHeight - GS!(8), popupRadius);
 				}
                 g.SetFont(IDEApp.sApp.mCodeFont);
 
@@ -527,7 +528,9 @@ namespace IDE.ui
 						        width -= GS!(18);
 							width = Math.Max(dispWidth, width);
 
-						    g.DrawButton(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.MenuSelect), GS!(4), selectedEntry.Y - GS!(2), width);
+						    using (g.PushColor(DarkTheme.COLOR_MENU_SELECTED))
+						        g.FillRoundedRect(GS!(4), selectedEntry.Y - GS!(2), width, DarkTheme.sUnitSize - GS!(2),
+									DarkTheme.SURFACE_RADIUS * DarkTheme.sScale * 0.5f);
 						}
 					}
 
@@ -813,11 +816,12 @@ namespace IDE.ui
 								//float drawHeight = GS!(32);
 								float drawHeight = mDocHeight;
 
-							    using (g.PushColor(0x80000000))
-							        g.DrawBox(DarkTheme.sDarkTheme.GetImage(.DropShadow), drawX + GS!(2), drawY + GS!(2), mRightBoxAdjust - GS!(2), drawHeight - GS!(2));
+							    float popupRadius = DarkTheme.SURFACE_RADIUS * DarkTheme.sScale;
+							    g.FillRoundedRectShadow(drawX + GS!(2), drawY + GS!(2), mRightBoxAdjust - GS!(2), drawHeight - GS!(2),
+									popupRadius, DarkTheme.SHADOW_RADIUS * DarkTheme.sScale, DarkTheme.COLOR_SHADOW);
 
-							    using (g.PushColor(0xFFFFFFFF))
-							        g.DrawBox(DarkTheme.sDarkTheme.GetImage(.Menu), drawX, drawY, mRightBoxAdjust - GS!(8), drawHeight - GS!(8));
+							    using (g.PushColor(DarkTheme.COLOR_MENU))
+							        g.FillRoundedRect(drawX, drawY, mRightBoxAdjust - GS!(8), drawHeight - GS!(8), popupRadius);
 
 								using (g.PushColor(gApp.mSettings.mUISettings.mColors.mAutoCompleteDocText))
 									g.DrawString(docParser.ShowDocString, drawX + GS!(8), drawY + GS!(4), .Left, mDocWidth - GS!(20), .Wrap);

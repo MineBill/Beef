@@ -1168,8 +1168,9 @@ public class ToolWindowPane : Widget
 
 	public override void Draw(Graphics g)
 	{
+		let radius = GS!(DarkTheme.SURFACE_RADIUS);
 		using (g.PushColor(DarkTheme.COLOR_BKG_ALT))
-			g.FillRect(0, 0, mWidth, mHeight);
+			g.FillRoundedRect(0, 0, mWidth, mHeight, radius);
 
 		if (mTool == null)
 			return;
@@ -1180,7 +1181,7 @@ public class ToolWindowPane : Widget
 		using (g.PushColor(DarkTheme.COLOR_TEXT))
 			g.DrawString(mTool.mLabel, GS!(8), (headerHeight - g.mFont.GetLineSpacing()) * 0.5f, .Left, mWidth - GS!(30), .Ellipsis);
 
-		using (g.PushColor(DarkTheme.COLOR_TEXT_DISABLED))
+		using (g.PushColor(DarkTheme.COLOR_BKG))
 			g.FillRect(0, headerHeight - GS!(1), mWidth, GS!(1));
 	}
 }

@@ -566,18 +566,11 @@ namespace Beefy.theme.dark
 			float height = darkListView.mFont.GetLineSpacing();
 
             uint32 color = Focused ? mFocusColor : mSelectColor;
+            float hiliteHeight = (Math.Abs(height - mSelfHeight) < height * 0.5f) ? height : mSelfHeight;
             using (g.PushColor(color))
 			{
-				if (Math.Abs(height - mSelfHeight) < height * 0.5f)
-				{
-	                g.DrawButton(DarkTheme.sDarkTheme.GetImage(Focused ? DarkTheme.ImageIdx.MenuSelect : DarkTheme.ImageIdx.MenuNonFocusSelect),
-	                    hiliteX, 0, Math.Max(lastStrWidth + GS!(16), mWidth - GS!(4) - hiliteX));
-				}
-				else
-				{
-					g.DrawBox(DarkTheme.sDarkTheme.GetImage(Focused ? DarkTheme.ImageIdx.MenuSelect : DarkTheme.ImageIdx.MenuNonFocusSelect),
-						hiliteX, 0, Math.Max(lastStrWidth + GS!(16), mWidth - GS!(4) - hiliteX), mSelfHeight);
-				}
+                g.FillRoundedRect(hiliteX, 0, Math.Max(lastStrWidth + GS!(16), mWidth - GS!(4) - hiliteX), hiliteHeight,
+                    DarkTheme.SURFACE_RADIUS * DarkTheme.sScale * 0.5f);
 			}
         }
 
@@ -1158,18 +1151,20 @@ namespace Beefy.theme.dark
 
             if (mDrawBox)
             {
-                g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.EditBox), 0, 0, mWidth, mHeight);
-                if (mHasFocus)
-                {
-                    using (g.PushColor(DarkTheme.COLOR_SELECTED_OUTLINE))
-                        g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.Outline), 0, 0, mWidth, mHeight);
-                }
+                float radius = DarkTheme.SURFACE_RADIUS * DarkTheme.sScale;
+                float borderWidth = DarkTheme.SURFACE_BORDER_WIDTH * DarkTheme.sScale;
+
+                using (g.PushColor(DarkTheme.COLOR_EDITBOX))
+                    g.FillRoundedRect(0, 0, mWidth, mHeight, radius);
+
+                using (g.PushColor(mHasFocus ? DarkTheme.COLOR_SELECTED_OUTLINE : DarkTheme.COLOR_SURFACE_BORDER))
+                    g.OutlineRoundedRect(0, 0, mWidth, mHeight, radius, borderWidth);
             }
 
             if (mShowHeader)
             {
-                if (mHeaderImageIdx < (.)DarkTheme.sDarkTheme.mImages.Count)
-                    g.DrawButton(DarkTheme.sDarkTheme.GetImage(mHeaderImageIdx), 0, 0, mWidth);
+                using (g.PushColor(DarkTheme.COLOR_PANEL_HEADER))
+                    g.FillRect(0, 0, mWidth, DarkTheme.sUnitSize);
             
                 using (g.PushClip(1, 0, mWidth - GS!(2), mHeight))
                 {

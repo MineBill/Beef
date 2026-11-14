@@ -8,16 +8,16 @@ namespace Beefy.theme.dark
 {
     public class DarkScrollbar : Scrollbar
     {
+		public static uint32 BaseSize = 10;
+
         public class DarkThumb : Scrollbar.Thumb
         {               
             public override void Draw(Graphics g)
             {
                 base.Draw(g);
-                DarkScrollbar scrollbar = (DarkScrollbar)mScrollbar;
-                if (mScrollbar.mOrientation == Scrollbar.Orientation.Horz)
-                    g.DrawButton(scrollbar.GetImage((mMouseOver || mMouseDown) ? DarkTheme.ImageIdx.ScrollbarThumb : DarkTheme.ImageIdx.ScrollbarThumbOver), 0, 0, mWidth);
-                else
-                    g.DrawButtonVert(scrollbar.GetImage((mMouseOver || mMouseDown) ? DarkTheme.ImageIdx.ScrollbarThumb : DarkTheme.ImageIdx.ScrollbarThumbOver), 0, 0, mHeight);
+                bool isOver = (mMouseOver || mMouseDown);
+                using (g.PushColor(isOver ? DarkTheme.COLOR_SCROLLBAR_THUMB_HOVER : DarkTheme.COLOR_SCROLLBAR_THUMB))
+                    g.FillRoundedRect(0, 0, mWidth, mHeight, Math.Min(mWidth, mHeight) * 0.5f);
             }
         }
 
@@ -34,10 +34,11 @@ namespace Beefy.theme.dark
 
                 DarkScrollbar scrollbar = (DarkScrollbar)mScrollbar;
 
-                if (mMouseOver && mMouseDown)
-                    g.Draw(scrollbar.GetImage(DarkTheme.ImageIdx.ShortButtonDown));
-                else if (mMouseOver)
-                    g.Draw(scrollbar.GetImage(DarkTheme.ImageIdx.ShortButton));
+                if (mMouseOver)
+                {
+                    using (g.PushColor(mMouseDown ? DarkTheme.COLOR_SURFACE_PRESSED : DarkTheme.COLOR_SURFACE_HOVER))
+                        g.FillRoundedRect(0, 0, mWidth, mHeight, DarkTheme.SURFACE_RADIUS * DarkTheme.sScale);
+                }
 
                 if (mBack)
                 {
@@ -63,7 +64,7 @@ namespace Beefy.theme.dark
 
         public this()
         {
-            mBaseSize = DarkTheme.sUnitSize - 1;
+            mBaseSize = GS!(BaseSize);
             mDualBarSizeOffset = -2;
 
             mThumb = new DarkThumb();
@@ -81,7 +82,7 @@ namespace Beefy.theme.dark
 
 		public override void RehupScale(float oldScale, float newScale)
 		{
-			mBaseSize = DarkTheme.sUnitSize - 1;
+			mBaseSize = GS!(BaseSize);
 			base.RehupScale(oldScale, newScale);
 		}
 
@@ -97,14 +98,8 @@ namespace Beefy.theme.dark
         {
             base.Draw(g);
 
-            if (mOrientation == Orientation.Horz)
-            {                
-                g.DrawButton(GetImage(DarkTheme.ImageIdx.Scrollbar), 0, 0, mWidth);
-            }
-            else
-            {                
-                g.DrawButtonVert(GetImage(DarkTheme.ImageIdx.Scrollbar), 0, 0, mHeight);
-            }
+            using (g.PushColor(DarkTheme.COLOR_SCROLLBAR))
+                g.FillRect(0, 0, mWidth, mHeight);
         }
 
 		public override void DrawAll(Graphics g)
@@ -138,11 +133,11 @@ namespace Beefy.theme.dark
 
         public override void ResizeContent()
         {
-            mStartArrow.Resize(0, 0, mBaseSize, mBaseSize);
+            mStartArrow.Resize(-mBaseSize / 2.0f, -mBaseSize / 2.0f, mBaseSize, mBaseSize);
             if (mOrientation == Orientation.Horz)
-                mEndArrow.Resize(mWidth - mBaseSize, 0, mBaseSize, mBaseSize);
+                mEndArrow.Resize(mWidth - mBaseSize, -mBaseSize / 2.0f, mBaseSize, mBaseSize);
             else
-                mEndArrow.Resize(0, mHeight - mBaseSize, mBaseSize, mBaseSize);
+                mEndArrow.Resize(-mBaseSize / 2.0f, mHeight - mBaseSize, mBaseSize, mBaseSize);
 
             float btnMargin = GS!(18);
 

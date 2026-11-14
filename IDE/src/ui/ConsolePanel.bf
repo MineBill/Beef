@@ -534,14 +534,15 @@ class ConsolePanel : Panel
 		var outHandle = Console.[Friend]GetStdHandle(Console.STD_OUTPUT_HANDLE);
 		String str = scope .(" ");
 
-		g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.EditBox), 0, 0, mWidth, mScrollableWidget.mHeight);
+		float boxRadius = DarkTheme.SURFACE_RADIUS * DarkTheme.sScale;
+		float boxBorder = DarkTheme.SURFACE_BORDER_WIDTH * DarkTheme.sScale;
+
+		using (g.PushColor(DarkTheme.COLOR_EDITBOX))
+			g.FillRoundedRect(0, 0, mWidth, mScrollableWidget.mHeight, boxRadius);
+		using (g.PushColor(mView.mHasFocus ? DarkTheme.COLOR_SELECTED_OUTLINE : DarkTheme.COLOR_SURFACE_BORDER))
+			g.OutlineRoundedRect(0, 0, mWidth, mScrollableWidget.mHeight, boxRadius, boxBorder);
 		using (g.PushColor(mConsoleProvider.GetColor(0)))
 			g.FillRect(GS!(2), GS!(2), mScrollableWidget.mVertScrollbar.mX - GS!(0), mScrollableWidget.mHeight - GS!(4));
-		if (mView.mHasFocus)
-		{
-		    using (g.PushColor(DarkTheme.COLOR_SELECTED_OUTLINE))
-		        g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.Outline), 0, 0, mWidth, mHeight);
-		}
 
 		int32 topOfs = (.)mConsoleProvider.ScrollTop;
 		var cursorPos = mConsoleProvider.CursorPos;

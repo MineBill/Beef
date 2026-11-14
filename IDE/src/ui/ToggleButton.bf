@@ -22,8 +22,8 @@ class ToggleButton : DarkButton
 
 		if (mToggled)
 		{
-			g.DrawBox(DarkTheme.sDarkTheme.GetImage(mHasFocus ? DarkTheme.ImageIdx.MenuSelect : DarkTheme.ImageIdx.MenuNonFocusSelect),
-				0, 0, mWidth, mHeight);
+			using (g.PushColor(mHasFocus ? DarkTheme.COLOR_MENU_FOCUSED : DarkTheme.COLOR_MENU_SELECTED))
+				g.FillRoundedRect(0, 0, mWidth, mHeight, DarkTheme.SURFACE_RADIUS * DarkTheme.sScale);
 		}
 	}
 

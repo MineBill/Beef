@@ -999,10 +999,10 @@ namespace IDE.ui
 			}
 
             base.Draw(g);
-            using (g.PushColor((lockedFileCount == 0) ? 0xFFFFFFFF : 0xFFF0B0B0))
-                g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.Menu), 0, 0, mWidth - GS!(8), boxHeight);
+            using (g.PushColor((lockedFileCount == 0) ? DarkTheme.COLOR_MENU : 0xFFF0B0B0))
+                g.FillRoundedRect(0, 0, mWidth - GS!(8), boxHeight, DarkTheme.SURFACE_RADIUS * DarkTheme.sScale);
 
-            using (g.PushColor(0xFFE0E0E0))
+            using (g.PushColor(DarkTheme.COLOR_TEXT))
             {
                 g.SetFont(DarkTheme.sDarkTheme.mSmallBoldFont);
 				float border = GS!(8);

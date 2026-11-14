@@ -28,7 +28,8 @@ namespace IDE.ui
 
         public override void Draw(Graphics g)
         {
-            g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.EditBox), 0, GS!(mMemoryPanel.mBinaryDataWidget.mColumnHeaderHeight) + GS!(mHeaderLabelYOfs) - GS!(1), mWidth, mHeight - GS!(mMemoryPanel.mBinaryDataWidget.mColumnHeaderHeight));
+            using (g.PushColor(DarkTheme.COLOR_EDITBOX))
+                g.FillRect(0, GS!(mMemoryPanel.mBinaryDataWidget.mColumnHeaderHeight) + GS!(mHeaderLabelYOfs) - GS!(1), mWidth, mHeight - GS!(mMemoryPanel.mBinaryDataWidget.mColumnHeaderHeight));
 
             base.Draw(g);
         }

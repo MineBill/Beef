@@ -40,10 +40,11 @@ namespace IDE.ui
 
         public override void Draw(Graphics g)
         {
-            g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.PanelHeader), 0, 0, mWidth, mHeight);
+            using (g.PushColor(DarkTheme.COLOR_PANEL_HEADER))
+                g.FillRect(0, 0, mWidth, mHeight);
             g.SetFont(DarkTheme.sDarkTheme.mSmallFont);
 			float y = GS!(6);
-            using (g.PushColor(0xFFFFFFFF))
+            using (g.PushColor(DarkTheme.COLOR_TEXT))
             {
 				for (var str in mLabel.Split('\n'))
                 {

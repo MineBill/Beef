@@ -396,6 +396,29 @@ namespace Beefy.theme.dark
 		public static int32 sSrcImgUnitSize = 20;
 		public static int32 sUnitSize = 20;
 
+		// Procedural surface styling, replacing the stretchable parts of the UI atlas. Widgets read these
+		// directly at draw time, so a theme change only needs a repaint. Settings.Colors drives them.
+		public static uint32 COLOR_SURFACE          = 0xFF3C3C44;
+		public static uint32 COLOR_SURFACE_HOVER    = 0xFF484851;
+		public static uint32 COLOR_SURFACE_PRESSED  = 0xFF2F2F36;
+		public static uint32 COLOR_SURFACE_DISABLED = 0xFF35353B;
+		public static uint32 COLOR_SURFACE_BORDER   = 0xFF1C1C20;
+		public static uint32 COLOR_TAB_ACTIVE       = 0xFF303038;
+		public static uint32 COLOR_TAB_INACTIVE     = 0xFF222228;
+		public static uint32 COLOR_TAB_HOVER        = 0xFF3A3A43;
+		public static uint32 COLOR_TAB_STRIP        = 0xFF1E1E24;
+		public static uint32 COLOR_EDITBOX          = 0xFF2B2B31;
+		public static uint32 COLOR_MENU             = 0xFF2A2A30;
+		public static uint32 COLOR_PANEL_HEADER     = 0xFF33333A;
+		public static uint32 COLOR_SCROLLBAR        = 0xFF202026;
+		public static uint32 COLOR_SCROLLBAR_THUMB  = 0xFF4A4A55;
+		public static uint32 COLOR_SCROLLBAR_THUMB_HOVER = 0xFF5C5C68;
+		public static uint32 COLOR_SHADOW           = 0x60000000;
+		public static float SURFACE_RADIUS          = 4.0f;
+		public static float SURFACE_BORDER_WIDTH    = 1.0f;
+		public static float SHADOW_RADIUS           = 2.0f;
+
+
         public static DarkTheme sDarkTheme ~ delete _;
         Image mThemeImage;
         Image mThemeImage2X;

@@ -37,12 +37,13 @@ namespace IDE.ui
 			/*using (g.PushColor(0x80FF0000))
 				g.FillRect(0, 0, mWidth, mHeight);*/
 
-			using (g.PushColor(0x80000000))
-			    g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.DropShadow), GS!(2), 0 + GS!(2), mWidth - GS!(2), mHeight - GS!(2));
+			float radius = DarkTheme.SURFACE_RADIUS * DarkTheme.sScale;
+			g.FillRoundedRectShadow(GS!(2), GS!(2), mWidth - GS!(2), mHeight - GS!(2), radius,
+				DarkTheme.SHADOW_RADIUS * DarkTheme.sScale, DarkTheme.COLOR_SHADOW);
 
 			base.Draw(g);
-			using (g.PushColor(0xFFFFFFFF))
-			    g.DrawBox(DarkTheme.sDarkTheme.GetImage(DarkTheme.ImageIdx.Menu), 0, 0, mWidth - GS!(8), mHeight - GS!(8));
+			using (g.PushColor(DarkTheme.COLOR_MENU))
+			    g.FillRoundedRect(0, 0, mWidth - GS!(8), mHeight - GS!(8), radius);
 		}
 
 		public override void Update()
