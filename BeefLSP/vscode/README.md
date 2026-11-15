@@ -1,0 +1,75 @@
+# Beef for VS Code
+
+Language support for [Beef](https://www.beeflang.org) backed by `beeflsp` (in the
+parent directory), which drives the same C++ compiler frontend as the Beef IDE.
+
+## Features
+
+* `.bf` file association, syntax highlighting and comment/bracket/indent rules.
+* Completion (including member completion from `corlib` and project
+  dependencies) with documentation on resolve.
+* Status bar entry and a `Beef: Restart Language Server` command.
+
+Diagnostics, hover, go-to-definition and the rest are not implemented in the
+server yet.
+
+## Requirements
+
+The extension only starts a process; it does not contain the server. Build it
+first from the repository root:
+
+```bat
+call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat"
+cmake -S BeefLSP -B build-lsp -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build-lsp
+```
+
+That produces `build-lsp/bin/beeflsp.exe` (or `bin/beeflsp` on Linux). The
+extension finds it automatically when the workspace root contains
+`build-lsp/bin`, `build/bin`, `BeefLSP/build/bin` or `IDE/dist`. Otherwise set
+`beef.server.path`, or put `beeflsp` on `PATH`.
+
+Open the folder that contains `BeefSpace.toml` (or `BeefProj.toml`) as your
+workspace so the server can resolve the whole project.
+
+## Developing the extension
+
+```bash
+cd BeefLSP/vscode
+npm install
+npm run build      # bundles to dist/extension.js
+```
+
+Press `F5` (Run Extension) to launch an Extension Development Host. The repo's
+root `.gitignore` ignores `.vscode/`, so a fresh clone needs this launch
+configuration added manually:
+
+```json
+{
+  "type": "extensionHost",
+  "request": "launch",
+  "name": "Run Extension",
+  "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
+  "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+  "preLaunchTask": "npm: build"
+}
+```
+
+Other useful commands:
+
+```bash
+npm run typecheck  # tsc --noEmit
+npm run package    # produces a .vsix via vsce
+code --install-extension beeflsp-0.1.0.vsix
+```
+
+## Settings
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `beef.server.path` | `""` | Absolute path to `beeflsp`. Empty means auto-detect. |
+| `beef.server.extraArgs` | `[]` | Extra arguments passed to the server. |
+
+Changing either setting restarts the server. The output channel
+`Beef Language Server` contains the server's stderr log, which is where
+workspace resolution progress is reported.

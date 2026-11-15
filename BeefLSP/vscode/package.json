@@ -1,0 +1,96 @@
+{
+  "name": "beeflsp",
+  "displayName": "Beef",
+  "description": "Beef language support (completion) powered by the Beef compiler frontend",
+  "version": "0.1.0",
+  "publisher": "beeflang",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "beef",
+    "beeflang",
+    "bf",
+    "lsp"
+  ],
+  "activationEvents": [
+    "onLanguage:beef"
+  ],
+  "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "The extension launches the beeflsp executable from the workspace."
+    }
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "beef",
+        "aliases": [
+          "Beef",
+          "beef"
+        ],
+        "extensions": [
+          ".bf"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "beef",
+        "scopeName": "source.beef",
+        "path": "./syntaxes/beef.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "beef.restartServer",
+        "title": "Beef: Restart Language Server"
+      }
+    ],
+    "configuration": {
+      "title": "Beef",
+      "properties": {
+        "beef.server.path": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Absolute path to the `beeflsp` executable. When empty the extension looks for `beeflsp(.exe)` in `<workspace>/build-lsp/bin`, `<workspace>/build/bin`, `<workspace>/BeefLSP/build/bin`, `<workspace>/IDE/dist`, and finally on `PATH`."
+        },
+        "beef.server.extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Extra command line arguments passed to beeflsp."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap --watch",
+    "typecheck": "tsc --noEmit -p .",
+    "package": "vsce package --no-dependencies --allow-missing-repository"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.24.0",
+    "esbuild": "^0.21.0",
+    "typescript": "^5.4.0"
+  }
+}

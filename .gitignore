@@ -14,6 +14,7 @@ SDL2.dll
 **/Release */*
 **/Release_*/*
 **/build/*
+**/build-lsp/*
 **/recovery/*
 **/.vs/*
 BeefSpace_User.toml

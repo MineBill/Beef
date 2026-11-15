@@ -20,6 +20,10 @@ add_subdirectory(extern/hunspell)
 add_subdirectory(IDEHelper)
 add_subdirectory(BeefBoot)
 
+if (DEFINED BF_LSP)
+  add_subdirectory(BeefLSP)
+endif()
+
 if (BF_DBG_HOST AND UNIX AND NOT APPLE)
   add_subdirectory(BeefTools/DbgModuleCheck)
 endif()
