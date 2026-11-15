@@ -275,6 +275,7 @@ namespace IDE
 			Add("Navigate Forwards", new => gApp.[Friend]NavigateForwards);
 			Add("New Debug Session", new => gApp.Cmd_NewDebugSession);
 			Add("New File", new => gApp.Cmd_NewFile);
+			Add("New Scratch", new => gApp.Cmd_NewScratch);
 			Add("New Project", new => gApp.Cmd_NewProject);
 			Add("New Workspace", new => gApp.Cmd_NewWorkspace);
 			Add("Next Document Panel", new => gApp.[Friend]DoShowNextDocumentPanel);
@@ -335,6 +336,7 @@ namespace IDE
 			Add("Show Memory", new => gApp.ShowMemory);
 			Add("Show Modules", new => gApp.ShowModules);
 			Add("Show Output", new => gApp.ShowOutput);
+			Add("Toggle Output", new => gApp.ToggleOutput);
 			Add("Show Profiler", new => gApp.ShowProfilePanel);
 			Add("Show QuickWatch", new => gApp.ShowQuickWatch);
 			Add("Show Threads", new => gApp.ShowThreads);

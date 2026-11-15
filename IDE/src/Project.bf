@@ -1474,6 +1474,7 @@ namespace IDE
         public bool mNeedsTargetRebuild;
 		public bool mForceCustomCommands;
 		public bool mEnabled = true;
+		public bool mIsScratch;
 		public bool mLocked;
 		public bool mLockedDefault;
 		public bool mDeleted;

@@ -500,6 +500,7 @@ namespace IDE.ui
         public bool mHasChangedSinceLastCompile;
         public bool mIsSourceCode;
         public bool mIsBeefSource;
+		public bool mIsScratch;
 		public bool mIsClang;
 #if IDE_C_SUPPORT
         public bool mClangSourceChanged;
@@ -522,7 +523,7 @@ namespace IDE.ui
         int mHotFileIdx = -1;
         bool mIsOldCompiledVersion;
         static bool sPreviousVersionWarningShown;
-        PanelHeader mPanelHeader;
+        protected PanelHeader mPanelHeader;
         NavigationBar mNavigationBar;
         public SymbolReferenceHelper mRenameSymbolDialog;
         public int32 mBackgroundDelay = 0;
@@ -2900,7 +2901,10 @@ namespace IDE.ui
 			if (mWidgetWindow == null)
 				return;
 			let activePanel = GetActivePanel();
-            activePanel.mEditWidget?.SetFocus();
+			// The active panel's edit widget may be temporarily detached (eg. its tab is
+			// being moved between tabbed views), in which case it has no window to focus.
+			if ((activePanel.mEditWidget != null) && (activePanel.mEditWidget.mWidgetWindow != null))
+				activePanel.mEditWidget.SetFocus();
 
 			if (!mWidgetWindow.mHasFocus)
 				EditGotFocus();
@@ -2947,7 +2951,7 @@ namespace IDE.ui
         {
 			ContentGotFocus();
 
-			if ((mFilePath != null) && (mEmbedKind == .None))
+			if ((mFilePath != null) && (mEmbedKind == .None) && (!mIsScratch))
 				gApp.AddToRecentDisplayedFilesList(mFilePath);
 			if (mLoadFailed)
 				return;
@@ -2991,7 +2995,7 @@ namespace IDE.ui
 				gApp.mLastActiveSourceViewPanel = this;
 				gApp.mLastActivePanel = this;
 
-				if ((gApp.mSettings.mEditorSettings.mSyncWithWorkspacePanel) && (mProjectSource != null))
+				if ((gApp.mSettings.mEditorSettings.mSyncWithWorkspacePanel) && (mProjectSource != null) && (!mIsScratch))
 				{
 					SyncWithWorkspacePanel();
 				}

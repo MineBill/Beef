@@ -1006,6 +1006,7 @@ namespace IDE
 				Add("Move Statement Up", "Ctrl+Shift+Up");
 				Add("Navigate Backwards", "Alt+Left");
 				Add("Navigate Forwards", "Alt+Right");
+				Add("New Scratch", "Ctrl+Shift+N");
 				Add("Next Document Panel", "Ctrl+Comma");
 				Add("Open Corresponding", "Alt+O");
 				Add("Open File in Workspace", "Shift+Alt+O");
@@ -1045,6 +1046,7 @@ namespace IDE
 				Add("Show Memory", "Ctrl+Alt+M");
 				Add("Show Modules", "Ctrl+Alt+U");
 				Add("Show Output", "Ctrl+Alt+O");
+				Add("Toggle Output", "Ctrl+B");
 				Add("Show Profiler", "Ctrl+Alt+P");
 				Add("Show QuickWatch", "Shift+Alt+W");
 				Add("Show Threads", "Ctrl+Alt+H");

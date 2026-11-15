@@ -97,10 +97,10 @@ namespace IDE
 			{
 				mSharedData.mOpenNewWindowDelegate.Add(new (fromTabbedView, newWindow) => gApp.SetupNewWindow(newWindow, true));
 				mSharedData.mTabbedViewClosed.Add(new (tabbedView) =>
-					{
-						if (tabbedView == gApp.mActiveDocumentsTabbedView)
-							gApp.mActiveDocumentsTabbedView = null;
-					});
+				{
+					if (tabbedView == gApp.mActiveDocumentsTabbedView)
+						gApp.mActiveDocumentsTabbedView = null;
+				});
 			}
 		}
 
@@ -140,7 +140,7 @@ namespace IDE
 		#elif BF_PLATFORM_MACOS
 		public static readonly String sPlatform64Name = "macOS";
 		public static readonly String sPlatform32Name = null;
-#else
+		#else
 		public static readonly String sPlatform64Name = "Unknown64";
 		public static readonly String sPlatform32Name = "Unknown32";
 #endif
@@ -241,6 +241,7 @@ namespace IDE
 		public ClassViewPanel mClassViewPanel;
 		public Widget mLastActivePanel;
 		public SourceViewPanel mLastActiveSourceViewPanel;
+		public int mScratchCounter;
 		public AutoCompletePanel mAutoCompletePanel;
 		public BookmarksPanel mBookmarksPanel;
 
@@ -441,7 +442,6 @@ namespace IDE
 
 			public virtual void GetStatus(String outStr)
 			{
-
 			}
 		}
 
@@ -733,9 +733,9 @@ namespace IDE
 		public void MarkWatchesDirty()
 		{
 			WithWatchPanels(scope (watchPanel) =>
-				{
-					watchPanel.MarkWatchesDirty(false);
-				});
+			{
+				watchPanel.MarkWatchesDirty(false);
+			});
 		}
 
 		public virtual void DeletePanels()
@@ -779,9 +779,9 @@ namespace IDE
 				disasmPanel.mLocationDirty = true;
 			mDebugger.mCallStackDirty = true;
 			WithWatchPanels(scope (watchPanel) =>
-				{
-					watchPanel.MarkWatchesDirty(true, !mTargetHadFirstBreak);
-				});
+			{
+				watchPanel.MarkWatchesDirty(true, !mTargetHadFirstBreak);
+			});
 			mMemoryPanel.MarkViewDirty();
 			mCallStackPanel.MarkCallStackDirty();
 			mThreadPanel.MarkThreadsDirty();
@@ -1357,30 +1357,30 @@ namespace IDE
 					changedList.Add(fileName);
 				}
 			mWorkspace.WithProjectItems(scope (projectItem) =>
+			{
+				var projectSource = projectItem as ProjectSource;
+				if (projectSource != null)
 				{
-					var projectSource = projectItem as ProjectSource;
-					if (projectSource != null)
+					if ((projectSource.mEditData != null) && (projectSource.mEditData.HasTextChanged()))
 					{
-						if ((projectSource.mEditData != null) && (projectSource.mEditData.HasTextChanged()))
-						{
-							var fileName = new String();
-							Path.GetFileName(projectSource.mPath, fileName);
-							changedList.Add(fileName);
-						}
+						var fileName = new String();
+						Path.GetFileName(projectSource.mPath, fileName);
+						changedList.Add(fileName);
 					}
-				});
+				}
+			});
 			WithContentPanels(scope (contentPanel) =>
+			{
+				if (contentPanel.HasUnsavedChanges())
 				{
-					if (contentPanel.HasUnsavedChanges())
-					{
-						var fileName = scope String();
-						Path.GetFileName(contentPanel.mFilePath, fileName);
-						if (fileName.IsWhiteSpace)
-							fileName.Set("untitled");
-						if (!changedList.Contains(fileName))
-							changedList.Add(new String(fileName));
-					}
-				});
+					var fileName = scope String();
+					Path.GetFileName(contentPanel.mFilePath, fileName);
+					if (fileName.IsWhiteSpace)
+						fileName.Set("untitled");
+					if (!changedList.Contains(fileName))
+						changedList.Add(new String(fileName));
+				}
+			});
 
 			if (changedList.Count == 0)
 			{
@@ -1394,20 +1394,20 @@ namespace IDE
 			ClearAndDeleteItems(changedList);
 
 			aDialog.mDefaultButton = aDialog.AddButton("Save", new (evt) =>
-				{
-					onSave();
-				} ~ delete onSave);
+			{
+				onSave();
+			} ~ delete onSave);
 			aDialog.AddButton("Don't Save", new (evt) =>
-				{
-					OutputLine("Changes not saved.");
-					onNoSave();
-				} ~ delete onNoSave);
+			{
+				OutputLine("Changes not saved.");
+				onNoSave();
+			} ~ delete onNoSave);
 
 			aDialog.mEscButton = aDialog.AddButton("Cancel", new (evt) =>
-				{
-					if (onCancel != null)
-						onCancel();
-				} ~ delete onCancel);
+			{
+				if (onCancel != null)
+					onCancel();
+			} ~ delete onCancel);
 			aDialog.PopupWindow((WidgetWindow)window ?? mMainWindow);
 			return false;
 		}
@@ -1419,16 +1419,16 @@ namespace IDE
 
 			return CheckCloseWorkspace(window,
 				new () =>
-				{
-					// We use a close delay after saving so the user can see we actually saved before closing down
-					if (SaveAll())
-						mCloseDelay = 30;
-				},
+			{
+				// We use a close delay after saving so the user can see we actually saved before closing down
+				if (SaveAll())
+					mCloseDelay = 30;
+			},
 				new () =>
-				{
-					SaveWorkspaceUserData(false);
-					mMainWindow.Close(true);
-				}, null);
+			{
+				SaveWorkspaceUserData(false);
+				mMainWindow.Close(true);
+			}, null);
 		}
 
 		public bool SecondaryAllowClose(BFWindow window)
@@ -1439,9 +1439,9 @@ namespace IDE
 			void CloseTabs()
 			{
 				WithDocumentTabbedViewsOf(window, scope (tabbedView) =>
-					{
-						tabbedView.CloseTabs(false, true, true);
-					});
+				{
+					tabbedView.CloseTabs(false, true, true);
+				});
 			}
 
 			void CloseWindow()
@@ -1453,14 +1453,14 @@ namespace IDE
 			List<String> changedList = scope List<String>();
 			defer ClearAndDeleteItems(changedList);
 			WithContentPanelsOf(window, scope (contentPanel) =>
+			{
+				if (contentPanel.HasUnsavedChanges())
 				{
-					if (contentPanel.HasUnsavedChanges())
-					{
-						var fileName = new String();
-						Path.GetFileName(contentPanel.mFilePath, fileName);
-						changedList.Add(fileName);
-					}
-				});
+					var fileName = new String();
+					Path.GetFileName(contentPanel.mFilePath, fileName);
+					changedList.Add(fileName);
+				}
+			});
 
 			if (changedList.Count == 0)
 			{
@@ -1469,32 +1469,32 @@ namespace IDE
 			}
 			var aDialog = QuerySaveFiles(changedList, (WidgetWindow)window);
 			aDialog.mDefaultButton = aDialog.AddButton("Save", new (evt) =>
+			{
+				bool hadError = false;
+				// We use a close delay after saving so the user can see we actually saved before closing down
+				var _this = this;
+				WithContentPanelsOf(window, scope [&] (contentPanel) =>
 				{
-					bool hadError = false;
-					// We use a close delay after saving so the user can see we actually saved before closing down
-					var _this = this;
-					WithContentPanelsOf(window, scope [&] (contentPanel) =>
-						{
-							if ((!hadError) && (contentPanel.HasUnsavedChanges()))
-								if (!_this.SaveFile(contentPanel))
-									hadError = true;
-						});
-					if (hadError)
-						return;
-					CloseTabs();
-					CloseWindow();
+					if ((!hadError) && (contentPanel.HasUnsavedChanges()))
+						if (!_this.SaveFile(contentPanel))
+							hadError = true;
 				});
+				if (hadError)
+					return;
+				CloseTabs();
+				CloseWindow();
+			});
 			aDialog.AddButton("Don't Save", new (evt) =>
+			{
+				var _this = this;
+				WithContentPanelsOf(window, scope [&] (contentPanel) =>
 				{
-					var _this = this;
-					WithContentPanelsOf(window, scope [&] (contentPanel) =>
-						{
-							if (contentPanel.HasUnsavedChanges())
-								_this.RevertContentPanel(contentPanel);
-						});
-					CloseTabs();
-					CloseWindow();
+					if (contentPanel.HasUnsavedChanges())
+						_this.RevertContentPanel(contentPanel);
 				});
+				CloseTabs();
+				CloseWindow();
+			});
 
 			aDialog.mEscButton = aDialog.AddButton("Cancel");
 			aDialog.PopupWindow((WidgetWindow)window ?? mMainWindow);
@@ -1526,15 +1526,15 @@ namespace IDE
 		public void RefreshVisibleViews(SourceViewPanel excludeSourceViewPanel = null, CompilerBase.ViewRefreshKind viewRefreshKind = .FullRefresh)
 		{
 			WithSourceViewPanels(scope (sourceViewPanel) =>
+			{
+				if ((sourceViewPanel.mParent != null) && (sourceViewPanel != excludeSourceViewPanel))
 				{
-					if ((sourceViewPanel.mParent != null) && (sourceViewPanel != excludeSourceViewPanel))
-					{
-						if (viewRefreshKind == .Collapse)
-							sourceViewPanel.QueueCollapseRefresh();
-						else
-							sourceViewPanel.QueueFullRefresh(true);
-					}
-				});
+					if (viewRefreshKind == .Collapse)
+						sourceViewPanel.QueueCollapseRefresh();
+					else
+						sourceViewPanel.QueueFullRefresh(true);
+				}
+			});
 		}
 
 		public bool SaveFile(ProjectSource projectSource)
@@ -1553,9 +1553,9 @@ namespace IDE
 					String text = scope String();
 					projectSource.mEditData.mEditWidget.GetText(text);
 					if (!SafeWriteTextFile(path, text, true, projectSource.mEditData.mLineEndingKind, scope (outStr) =>
-						{
-							projectSource.mEditData.BuildHash(outStr);
-						}))
+					{
+						projectSource.mEditData.BuildHash(outStr);
+					}))
 					{
 						return false;
 					}
@@ -1749,9 +1749,9 @@ namespace IDE
 				editData.mEditWidget.GetText(text);
 
 				if (!SafeWriteTextFile(path, text, true, lineEndingKind, scope (outStr) =>
-					{
-						editData.BuildHash(outStr);
-					}))
+				{
+					editData.BuildHash(outStr);
+				}))
 				{
 					return false;
 				}
@@ -2650,9 +2650,9 @@ namespace IDE
 			StopDebugging();
 			mDebugger.Reset();
 			WithWatchPanels(scope (watchPanel) =>
-				{
-					watchPanel.Reset();
-				});
+			{
+				watchPanel.Reset();
+			});
 			mMemoryPanel.MarkViewDirty();
 			mCallStackPanel.MarkCallStackDirty();
 			mThreadPanel.MarkThreadsDirty();
@@ -2704,9 +2704,9 @@ namespace IDE
 			}
 
 			WithSourceViewPanels(scope (sourceViewPanel) =>
-				{
-					sourceViewPanel.Dispose();
-				});
+			{
+				sourceViewPanel.Dispose();
+			});
 
 			if (!mRunningTestScript)
 			{
@@ -2714,9 +2714,9 @@ namespace IDE
 				mToolWindowDock?.ResetDocumentArea();
 				mToolWindowDock?.CloseAllTools();
 				WithStandardPanels(scope (panel) =>
-					{
-						ResetPanel(panel);
-					});
+				{
+					ResetPanel(panel);
+				});
 				mMainFrame.Reset();
 			}
 
@@ -2794,17 +2794,17 @@ namespace IDE
 		{
 			bool done = CheckCloseWorkspace(mMainWindow,
 				new () =>
-				{
-					// We use a close delay after saving so the user can see we actually saved before closing down
-					if (SaveAll())
-					{
-						CloseWorkspaceAndSetupNew();
-					}
-				},
-				new () =>
+			{
+				// We use a close delay after saving so the user can see we actually saved before closing down
+				if (SaveAll())
 				{
 					CloseWorkspaceAndSetupNew();
-				}, null);
+				}
+			},
+				new () =>
+			{
+				CloseWorkspaceAndSetupNew();
+			}, null);
 
 			if (done)
 			{
@@ -3922,10 +3922,10 @@ namespace IDE
 		public void SaveClangFiles()
 		{
 			WithSourceViewPanels(scope (sourceViewPanel) =>
-				{
-					if (sourceViewPanel.mIsClang)
-						SaveFile(sourceViewPanel);
-				});
+			{
+				if (sourceViewPanel.mIsClang)
+					SaveFile(sourceViewPanel);
+			});
 		}
 
 		[IDECommand]
@@ -4010,17 +4010,17 @@ namespace IDE
 
 			bool done = CheckCloseWorkspace(mMainWindow,
 				new () =>
-				{
-					// We use a close delay after saving so the user can see we actually saved before closing down
-					if (SaveAll())
-					{
-						NewDebugSession(false);
-					}
-				},
-				new () =>
+			{
+				// We use a close delay after saving so the user can see we actually saved before closing down
+				if (SaveAll())
 				{
 					NewDebugSession(false);
-				}, null);
+				}
+			},
+				new () =>
+			{
+				NewDebugSession(false);
+			}, null);
 
 			if (done)
 			{
@@ -4048,6 +4048,39 @@ namespace IDE
 		}
 
 		[IDECommand]
+		public void Cmd_NewScratch()
+		{
+			ShowScratchPanel();
+		}
+
+		public ScratchPanel ShowScratchPanel()
+		{
+			var tabbedView = GetDefaultDocumentTabbedView();
+			if (tabbedView.mWidgetWindow != null)
+				tabbedView.mWidgetWindow.SetForeground();
+
+			mScratchCounter++;
+			String title = scope String()..AppendF("Scratch {0}", mScratchCounter);
+
+			var panel = new ScratchPanel();
+			panel.Init(title);
+
+			var tabButton = new ContentTabButton();
+			tabButton.Label = title;
+			tabButton.mWantWidth = tabButton.GetWantWidth();
+			tabButton.mHeight = tabbedView.mTabHeight;
+			tabButton.mContent = panel;
+			tabbedView.AddTab(tabButton, GetTabInsertIndex(tabbedView));
+			tabButton.mCloseClickedEvent.Add(new () => DocumentCloseClicked(panel));
+			tabButton.Activate(true);
+
+			if (panel.mWidgetWindow != null)
+				panel.FocusEdit();
+
+			return panel;
+		}
+
+		[IDECommand]
 		public void Cmd_OpenProject()
 		{
 			mProjectPanel.[Friend]ImportProject();
@@ -4071,20 +4104,20 @@ namespace IDE
 			bool success = true;
 
 			WithContentPanels(scope [&] (contentPanel) =>
-				{
-					success &= SaveFile(contentPanel);
-				});
+			{
+				success &= SaveFile(contentPanel);
+			});
 			mWorkspace.WithProjectItems(scope [&] (projectItem) =>
+			{
+				var projectSource = projectItem as ProjectSource;
+				if (projectSource != null)
 				{
-					var projectSource = projectItem as ProjectSource;
-					if (projectSource != null)
+					if ((projectSource.mEditData != null) && (projectSource.mEditData.HasTextChanged()))
 					{
-						if ((projectSource.mEditData != null) && (projectSource.mEditData.HasTextChanged()))
-						{
-							success &= SaveFile(projectSource);
-						}
+						success &= SaveFile(projectSource);
 					}
-				});
+				}
+			});
 			for (var project in mWorkspace.mProjects)
 			{
 				if (project.mHasChanged)
@@ -4152,7 +4185,8 @@ namespace IDE
 				text.Replace("\t", "    ");
 			}
 
-			// Always write to STDOUT even if we're running as a GUI, allowing cases like RunAndWait to pass us a stdout handle
+			// Always write to STDOUT even if we're running as a GUI, allowing cases like RunAndWait to pass us a stdout
+			// handle
 			Console.Error.WriteLine("ERROR: {0}", text).IgnoreError();
 
 #if CLI
@@ -4372,17 +4406,17 @@ namespace IDE
 			bool foundActiveTabbedView = false;
 
 			WithDocumentTabbedViews(scope [&] (tabbedView) =>
+			{
+				if (tabbedView.mIsFillWidget)
 				{
-					if (tabbedView.mIsFillWidget)
-					{
-						if (firstTabbedView == null)
-							firstTabbedView = tabbedView;
-						if (tabbedView == mActiveDocumentsTabbedView)
-							foundActiveTabbedView = true;
-						else if ((foundActiveTabbedView) && (nextTabbedView == null))
-							nextTabbedView = tabbedView;
-					}
-				});
+					if (firstTabbedView == null)
+						firstTabbedView = tabbedView;
+					if (tabbedView == mActiveDocumentsTabbedView)
+						foundActiveTabbedView = true;
+					else if ((foundActiveTabbedView) && (nextTabbedView == null))
+						nextTabbedView = tabbedView;
+				}
+			});
 			if (nextTabbedView == null)
 				nextTabbedView = firstTabbedView;
 			if (nextTabbedView != null)
@@ -4826,9 +4860,9 @@ namespace IDE
 		public void StackPositionChanged()
 		{
 			WithWatchPanels(scope (watchPanel) =>
-				{
-					watchPanel.MarkWatchesDirty(false, true);
-				});
+			{
+				watchPanel.MarkWatchesDirty(false, true);
+			});
 			mMemoryPanel.MarkViewDirty();
 		}
 
@@ -4837,9 +4871,9 @@ namespace IDE
 			//Debug.WriteLine("RefreshWatches");
 
 			WithWatchPanels(scope (watchPanel) =>
-				{
-					watchPanel.MarkWatchesDirty(false);
-				});
+			{
+				watchPanel.MarkWatchesDirty(false);
+			});
 			MarkDirty();
 
 			for (var window in gApp.mWindows)
@@ -4883,14 +4917,14 @@ namespace IDE
 
 			DisassemblyPanel disassemblyPanel = null;
 			WithTabs(scope [?] (tabButton) =>
+			{
+				if ((disassemblyPanel == null) && (tabButton.mContent is DisassemblyPanel))
 				{
-					if ((disassemblyPanel == null) && (tabButton.mContent is DisassemblyPanel))
-					{
-						var checkDisassemblyPanel = (DisassemblyPanel)tabButton.mContent;
-						if ((!onlyIfVisible) || (checkDisassemblyPanel.mWidgetWindow != null))
-							disassemblyPanel = checkDisassemblyPanel;
-					}
-				});
+					var checkDisassemblyPanel = (DisassemblyPanel)tabButton.mContent;
+					if ((!onlyIfVisible) || (checkDisassemblyPanel.mWidgetWindow != null))
+						disassemblyPanel = checkDisassemblyPanel;
+				}
+			});
 			return disassemblyPanel;
 		}
 
@@ -5402,12 +5436,12 @@ namespace IDE
 				if (var newPanel = tabContent as Panel)
 				{
 					WithTabs(scope [&] (tabButton) =>
+					{
+						if (newPanel.HasAffinity(tabButton.mContent))
 						{
-							if (newPanel.HasAffinity(tabButton.mContent))
-							{
-								tabbedView = tabButton.mTabbedView;
-							}
-						});
+							tabbedView = tabButton.mTabbedView;
+						}
+					});
 				}
 
 				if ((tabbedView == null) && (isDocument))
@@ -5440,7 +5474,7 @@ namespace IDE
 				sourceViewPanel.RecordHistoryLocation();
 		}
 
-		protected void ShowPanel(Panel panel, String label, bool setFocus = true, bool isDocument = false)
+		protected void ShowPanel(Panel panel, String label, bool setFocus = true, bool isDocument = false, bool toggle = false)
 		{
 			if (!mInitialized)
 				return;
@@ -5451,8 +5485,15 @@ namespace IDE
 
 			if (!isDocument && mToolWindowDock != null)
 			{
-				if (!mToolWindowDock.ToggleTool(mToolWindowDock.FindTool(panel)))
-					return;
+				if (toggle)
+				{
+					if (!mToolWindowDock.ToggleTool(mToolWindowDock.FindTool(panel)))
+						return;
+				} else
+				{
+					if (!mToolWindowDock.ShowToolPanel(panel))
+						return;
+				}
 				// Shown in a tool window corner
 			}
 			else
@@ -5699,9 +5740,9 @@ namespace IDE
 				mActiveDocumentsTabbedView = null;
 				mToolWindowDock?.CloseAllTools();
 				WithStandardPanels(scope (panel) =>
-					{
-						ResetPanel(panel);
-					});
+				{
+					ResetPanel(panel);
+				});
 				mMainFrame.Reset();
 			}
 
@@ -5740,6 +5781,12 @@ namespace IDE
 		public void ShowOutput()
 		{
 			ShowPanel(mOutputPanel, "Output", false);
+		}
+
+		[IDECommand]
+		public void ToggleOutput()
+		{
+			ShowPanel(mOutputPanel, "Output", false, toggle: true);
 		}
 
 		[IDECommand]
@@ -6036,7 +6083,8 @@ namespace IDE
 
 		void TestConfigNotSupported()
 		{
-			// Under BeefBuild the config defaults to "Test", so a non-Test config was explicitly requested - don't silently substitute another one
+			// Under BeefBuild the config defaults to "Test", so a non-Test config was explicitly requested - don't
+			// silently substitute another one
 			OutputErrorLine("Workspace configuration '{}' does not have a Test build kind, so tests cannot be run with it. Omit '-config' to use the 'Test' configuration, or set 'BuildKind = \"Test\"' on this configuration.", mConfigName);
 			TestFailed();
 		}
@@ -6234,6 +6282,7 @@ namespace IDE
 			newMenu.AddMenuItem("New &Project", "New Project");
 			newMenu.AddMenuItem("New &Debug Session", "New Debug Session");
 			newMenu.AddMenuItem("New &File", "New File");
+			newMenu.AddMenuItem("New &Scratch", "New Scratch");
 
 			let openMenu = subMenu.AddMenuItem("&Open");
 			//openMenu.AddMenuItem("&Open Workspace...", GetCmdKey("Open Workspace"), new (evt) => { OpenWorkspace(); } );
@@ -6295,33 +6344,33 @@ namespace IDE
 
 				lineEndingMenu.AddMenuItem(name,
 					new (menu) =>
+				{
+					var sysMenu = (SysMenu)menu;
+					var sourceViewPanel = GetActiveSourceViewPanel(allowLast);
+					if (sourceViewPanel != null)
 					{
-						var sysMenu = (SysMenu)menu;
-						var sourceViewPanel = GetActiveSourceViewPanel(allowLast);
-						if (sourceViewPanel != null)
+						if (sourceViewPanel.mEditData.mLineEndingKind != lineEndingKind)
 						{
-							if (sourceViewPanel.mEditData.mLineEndingKind != lineEndingKind)
-							{
-								sourceViewPanel.EditWidget.Content.mData.mCurTextVersionId++;
-								sourceViewPanel.mEditData.mLineEndingKind = lineEndingKind;
-								sysMenu.mParent.UpdateChildItems();
-							}
+							sourceViewPanel.EditWidget.Content.mData.mCurTextVersionId++;
+							sourceViewPanel.mEditData.mLineEndingKind = lineEndingKind;
+							sysMenu.mParent.UpdateChildItems();
 						}
-					},
+					}
+				},
 					new (menu) =>
-					{
-						var sysMenu = (SysMenu)menu;
+				{
+					var sysMenu = (SysMenu)menu;
 
-						var sourceViewPanel = GetActiveSourceViewPanel(allowLast);
-						if (sourceViewPanel != null)
-						{
-							sysMenu.Modify(null, null, null, true, (sourceViewPanel.mEditData.mLineEndingKind == lineEndingKind) ? 1 : 0, true);
-						}
-						else
-						{
-							sysMenu.Modify(null, null, null, false, 0, true);
-						}
-					});
+					var sourceViewPanel = GetActiveSourceViewPanel(allowLast);
+					if (sourceViewPanel != null)
+					{
+						sysMenu.Modify(null, null, null, true, (sourceViewPanel.mEditData.mLineEndingKind == lineEndingKind) ? 1 : 0, true);
+					}
+					else
+					{
+						sysMenu.Modify(null, null, null, false, 0, true);
+					}
+				});
 			}
 			AddLineEndingKind("Windows", .CrLf);
 			AddLineEndingKind("Unix", .Lf);
@@ -6366,13 +6415,13 @@ namespace IDE
 				internalEditMenu.AddMenuItem("Time Autocomplete", new (menu) => { ToggleCheck(menu, ref gApp.mDbgTimeAutocomplete); }, null, null, true, gApp.mDbgTimeAutocomplete ? 1 : 0);
 				internalEditMenu.AddMenuItem("Perf Autocomplete", new (menu) => { ToggleCheck(menu, ref gApp.mDbgPerfAutocomplete); }, null, null, true, gApp.mDbgPerfAutocomplete ? 1 : 0);
 				internalEditMenu.AddMenuItem("Dump Undo Buffer", new (menu) =>
+				{
+					if (var panel = GetActiveSourceViewPanel())
 					{
-						if (var panel = GetActiveSourceViewPanel())
-						{
-							var str = panel.mEditWidget.mEditWidgetContent.mData.mUndoManager.ToString(.. scope .());
-							Debug.WriteLine(str);
-						}
-					}, null, null, true, gApp.mDbgPerfAutocomplete ? 1 : 0);
+						var str = panel.mEditWidget.mEditWidgetContent.mData.mUndoManager.ToString(.. scope .());
+						Debug.WriteLine(str);
+					}
+				}, null, null, true, gApp.mDbgPerfAutocomplete ? 1 : 0);
 			}
 
 			//////////
@@ -6415,14 +6464,14 @@ namespace IDE
 			subMenu.AddMenuItem("Cancel Build", "Cancel Build", new (menu) => { menu.SetDisabled(!IsCompiling); });
 
 			subMenu.AddMenuItem("Verbose", new (menu) =>
-				{
-					if (mVerbosity != .Diagnostic)
-						mVerbosity = .Diagnostic;
-					else
-						mVerbosity = .Normal;
-					var sysMenu = (SysMenu)menu;
-					sysMenu.Modify(null, null, null, true, (mVerbosity == .Diagnostic) ? 1 : 0);
-				}, null, null, true, (mVerbosity == .Diagnostic) ? 1 : 0);
+			{
+				if (mVerbosity != .Diagnostic)
+					mVerbosity = .Diagnostic;
+				else
+					mVerbosity = .Normal;
+				var sysMenu = (SysMenu)menu;
+				sysMenu.Modify(null, null, null, true, (mVerbosity == .Diagnostic) ? 1 : 0);
+			}, null, null, true, (mVerbosity == .Diagnostic) ? 1 : 0);
 
 			if (mSettings.mEnableDevMode)
 			{
@@ -6436,13 +6485,13 @@ namespace IDE
 
 			subMenu = root.AddMenuItem("&Debug");
 			subMenu.AddMenuItem("&Start Debugging", "Start Debugging", new (item) =>
-				{
-					SysMenu sysMenu = (.)item;
-					if (mDebugger.mIsRunning)
-						sysMenu.Modify("&Continue", sysMenu.mHotKey, null, mDebugger.IsPaused());
-					else
-						sysMenu.Modify("&Start Debugging", sysMenu.mHotKey, null, mWorkspace.IsInitialized);
-				});
+			{
+				SysMenu sysMenu = (.)item;
+				if (mDebugger.mIsRunning)
+					sysMenu.Modify("&Continue", sysMenu.mHotKey, null, mDebugger.IsPaused());
+				else
+					sysMenu.Modify("&Start Debugging", sysMenu.mHotKey, null, mWorkspace.IsInitialized);
+			});
 			subMenu.AddMenuItem("Start Wit&hout Debugging", "Start Without Debugging", new => UpdateMenuItem_DebugStopped_HasWorkspace);
 			subMenu.AddMenuItem("Start With&out Compiling", "Start Without Compiling", new => UpdateMenuItem_DebugStopped_HasWorkspace);
 			subMenu.AddMenuItem("&Launch Process...", "Launch Process", new => UpdateMenuItem_DebugStopped);
@@ -6476,30 +6525,30 @@ namespace IDE
 				internalDebugMenu.AddMenuItem("Exit Test", new (menu) => { ExitTest(); });
 				internalDebugMenu.AddMenuItem("Run Test", new (menu) => { mRunTest = !mRunTest; });
 				internalDebugMenu.AddMenuItem("GC Collect", new (menu) =>
-					{
-						var profileId = Profiler.StartSampling().GetValueOrDefault();
-						for (int i < 10)
-							GC.Collect(false);
-						if (profileId != 0)
-							profileId.Dispose();
-					});
+				{
+					var profileId = Profiler.StartSampling().GetValueOrDefault();
+					for (int i < 10)
+						GC.Collect(false);
+					if (profileId != 0)
+						profileId.Dispose();
+				});
 				internalDebugMenu.AddMenuItem("Enable GC Collect", new (menu) => { ToggleCheck(menu, ref mEnableGCCollect); EnableGCCollect = mEnableGCCollect; }, null, null, true, mEnableGCCollect ? 1 : 0);
 				internalDebugMenu.AddMenuItem("Fast Updating", new (menu) => { ToggleCheck(menu, ref mDbgFastUpdate); EnableGCCollect = mDbgFastUpdate; }, null, null, true, mDbgFastUpdate ? 1 : 0);
 				internalDebugMenu.AddMenuItem("Alloc String", new (menu) => { new String("Alloc String"); }, null);
 				internalDebugMenu.AddMenuItem("Perform Long Update Checks", new (menu) =>
+				{
+					bool wantsLongUpdateCheck = mLongUpdateProfileId != 0;
+					ToggleCheck(menu, ref wantsLongUpdateCheck);
+					mLastLongUpdateCheck = 0;
+					mLastLongUpdateCheckError = 0;
+					if (wantsLongUpdateCheck)
+						mLongUpdateProfileId = Profiler.StartSampling("LongUpdate");
+					else
 					{
-						bool wantsLongUpdateCheck = mLongUpdateProfileId != 0;
-						ToggleCheck(menu, ref wantsLongUpdateCheck);
-						mLastLongUpdateCheck = 0;
-						mLastLongUpdateCheckError = 0;
-						if (wantsLongUpdateCheck)
-							mLongUpdateProfileId = Profiler.StartSampling("LongUpdate");
-						else
-						{
-							mLongUpdateProfileId.Dispose();
-							mLongUpdateProfileId = 0;
-						}
-					}, null, null, true, (mLongUpdateProfileId != 0) ? 1 : 0);
+						mLongUpdateProfileId.Dispose();
+						mLongUpdateProfileId = 0;
+					}
+				}, null, null, true, (mLongUpdateProfileId != 0) ? 1 : 0);
 			}
 
 			//////////
@@ -6515,9 +6564,9 @@ namespace IDE
 			testDebugMenu.AddMenuItem("&All Tests", "Debug All Tests");
 			testDebugMenu.AddMenuItem(null);
 			testDebugMenu.AddMenuItem("Break on Failure", new (menu) =>
-				{
-					ToggleCheck(menu, ref mTestBreakOnFailure);
-				}, null, null, true, mTestBreakOnFailure ? 1 : 0);
+			{
+				ToggleCheck(menu, ref mTestBreakOnFailure);
+			}, null, null, true, mTestBreakOnFailure ? 1 : 0);
 
 			testMenu.AddMenuItem("Enable Console", "Test Enable Console", null, null, true, mTestEnableConsole ? 1 : 0);
 
@@ -6623,24 +6672,24 @@ namespace IDE
 					if (darkDockingFrame != null)
 					{
 						darkDockingFrame.WithAllDockedWidgets(scope [&] (dockedWidget) =>
+						{
+							bool hadSource = false;
+							var tabbedView = dockedWidget as DarkTabbedView;
+							if (tabbedView != null)
 							{
-								bool hadSource = false;
-								var tabbedView = dockedWidget as DarkTabbedView;
-								if (tabbedView != null)
+								tabbedView.WithTabs(scope [&] (tab) =>
 								{
-									tabbedView.WithTabs(scope [&] (tab) =>
-										{
-											if (documentTabbedView != null)
-												return;
-											var content = tab.mContent;
-											if ((content is SourceViewPanel) ||
-												(content is DisassemblyPanel))
-												hadSource = true;
-										});
-								}
-								if (hadSource)
-									documentTabbedView = tabbedView;
-							});
+									if (documentTabbedView != null)
+										return;
+									var content = tab.mContent;
+									if ((content is SourceViewPanel) ||
+										(content is DisassemblyPanel))
+										hadSource = true;
+								});
+							}
+							if (hadSource)
+								documentTabbedView = tabbedView;
+						});
 					}
 					if (documentTabbedView != null)
 						return documentTabbedView;
@@ -6679,14 +6728,14 @@ namespace IDE
 		void PopulateDocumentMenu(DarkTabbedView tabbedView, Menu menu)
 		{
 			WithTabs(scope (tab) =>
+			{
+				var menuItem = menu.AddItem(tab.mLabel);
+				menuItem.mOnMenuItemSelected.Add(new (selMenuItem) =>
 				{
-					var menuItem = menu.AddItem(tab.mLabel);
-					menuItem.mOnMenuItemSelected.Add(new (selMenuItem) =>
-						{
-							TabbedView.TabButton activateTab = tab;
-							activateTab.Activate();
-						});
+					TabbedView.TabButton activateTab = tab;
+					activateTab.Activate();
 				});
+			});
 		}
 
 		public void WithDocumentTabbedViewsOf(BFWindow window, delegate void(DarkTabbedView) func)
@@ -6701,11 +6750,11 @@ namespace IDE
 				if (darkDockingFrame != null)
 				{
 					darkDockingFrame.WithAllDockedWidgets(scope (dockedWidget) =>
-						{
-							var tabbedView = dockedWidget as DarkTabbedView;
-							if (tabbedView != null)
-								func(tabbedView);
-						});
+					{
+						var tabbedView = dockedWidget as DarkTabbedView;
+						if (tabbedView != null)
+							func(tabbedView);
+					});
 				}
 			}
 		}
@@ -6822,9 +6871,9 @@ namespace IDE
 		public void WithTabsOf(BFWindow window, delegate void(TabbedView.TabButton) func)
 		{
 			WithDocumentTabbedViewsOf(window, scope (documentTabbedView) =>
-				{
-					documentTabbedView.WithTabs(func);
-				});
+			{
+				documentTabbedView.WithTabs(func);
+			});
 		}
 
 		public void WithTabs(delegate void(TabbedView.TabButton) func)
@@ -6837,21 +6886,21 @@ namespace IDE
 		{
 			TabbedView.TabButton tab = null;
 			WithTabs(scope [?] (checkTab) =>
-				{
-					if (checkTab.mContent == content)
-						tab = checkTab;
-				});
+			{
+				if (checkTab.mContent == content)
+					tab = checkTab;
+			});
 			return tab;
 		}
 
 		public void WithSourceViewPanelsOf(BFWindow window, delegate void(SourceViewPanel) func)
 		{
 			WithTabsOf(window, scope (tab) =>
-				{
-					var sourceViewPanel = tab.mContent as SourceViewPanel;
-					if (sourceViewPanel != null)
-						func(sourceViewPanel);
-				});
+			{
+				var sourceViewPanel = tab.mContent as SourceViewPanel;
+				if (sourceViewPanel != null)
+					func(sourceViewPanel);
+			});
 		}
 
 		public void WithSourceViewPanels(delegate void(SourceViewPanel) func)
@@ -6863,11 +6912,11 @@ namespace IDE
 		public void WithContentPanelsOf(BFWindow window, delegate void(ContentPanel) func)
 		{
 			WithTabsOf(window, scope (tab) =>
-				{
-					var contentPanel = tab.mContent as ContentPanel;
-					if (contentPanel != null)
-						func(contentPanel);
-				});
+			{
+				var contentPanel = tab.mContent as ContentPanel;
+				if (contentPanel != null)
+					func(contentPanel);
+			});
 		}
 
 		public void WithContentPanels(delegate void(ContentPanel) func)
@@ -6893,13 +6942,13 @@ namespace IDE
 			TabbedView.TabButton disassemblyTab = null;
 
 			WithTabs(scope [&] (tab) =>
+			{
+				if ((disassemblyPanel == null) && (tab.mContent is DisassemblyPanel))
 				{
-					if ((disassemblyPanel == null) && (tab.mContent is DisassemblyPanel))
-					{
-						disassemblyTab = tab;
-						disassemblyPanel = (DisassemblyPanel)tab.mContent;
-					}
-				});
+					disassemblyTab = tab;
+					disassemblyPanel = (DisassemblyPanel)tab.mContent;
+				}
+			});
 
 			if (disassemblyTab != null)
 			{
@@ -7069,65 +7118,65 @@ namespace IDE
 					{
 						var item = menu.AddItem("Copy Full Path");
 						item.mOnMenuItemSelected.Add(new (menu) =>
-							{
-								gApp.SetClipboardText(contentPanel.mFilePath);
-							});
+						{
+							gApp.SetClipboardText(contentPanel.mFilePath);
+						});
 						item = menu.AddItem("Open Containing Folder");
 						item.mOnMenuItemSelected.Add(new (menu) =>
-							{
-								let directory = scope String();
-								Path.GetDirectoryPath(contentPanel.mFilePath, directory);
+						{
+							let directory = scope String();
+							Path.GetDirectoryPath(contentPanel.mFilePath, directory);
 
-								ProcessStartInfo procInfo = scope ProcessStartInfo();
-								procInfo.UseShellExecute = true;
-								procInfo.SetFileName(directory);
+							ProcessStartInfo procInfo = scope ProcessStartInfo();
+							procInfo.UseShellExecute = true;
+							procInfo.SetFileName(directory);
 
-								let process = scope SpawnedProcess();
-								process.Start(procInfo).IgnoreError();
-							});
+							let process = scope SpawnedProcess();
+							process.Start(procInfo).IgnoreError();
+						});
 						item = menu.AddItem("Open in Terminal");
 						item.mOnMenuItemSelected.Add(new (menu) =>
-							{
-								let directory = scope String();
-								Path.GetDirectoryPath(contentPanel.mFilePath, directory);
+						{
+							let directory = scope String();
+							Path.GetDirectoryPath(contentPanel.mFilePath, directory);
 
-								ProcessStartInfo procInfo = scope ProcessStartInfo();
-								procInfo.UseShellExecute = true;
-								procInfo.SetFileName(gApp.mSettings.mWindowsTerminal);
-								procInfo.SetWorkingDirectory(directory);
+							ProcessStartInfo procInfo = scope ProcessStartInfo();
+							procInfo.UseShellExecute = true;
+							procInfo.SetFileName(gApp.mSettings.mWindowsTerminal);
+							procInfo.SetWorkingDirectory(directory);
 
-								let process = scope SpawnedProcess();
-								process.Start(procInfo).IgnoreError();
-							});
+							let process = scope SpawnedProcess();
+							process.Start(procInfo).IgnoreError();
+						});
 						item = menu.AddItem("Show in Workspace Panel");
 						item.mOnMenuItemSelected.Add(new (menu) =>
-							{
-								contentPanel.SyncWithWorkspacePanel();
-							});
+						{
+							contentPanel.SyncWithWorkspacePanel();
+						});
 						item = menu.AddItem("Close");
 						item.mOnMenuItemSelected.Add(new (menu) =>
-							{
-								mCloseClickedEvent();
-							});
+						{
+							mCloseClickedEvent();
+						});
 						item = menu.AddItem("Close All Except This");
 						item.mOnMenuItemSelected.Add(new (menu) =>
-							{
-								mTabbedView.CloseTabs(false, false, true);
-							});
+						{
+							mTabbedView.CloseTabs(false, false, true);
+						});
 						item = menu.AddItem("Close All Except Pinned");
 						item.mOnMenuItemSelected.Add(new (menu) =>
-							{
-								mTabbedView.CloseTabs(false, true, false);
-							});
+						{
+							mTabbedView.CloseTabs(false, true, false);
+						});
 
 						item = menu.AddItem(this.mIsPinned ? "Unpin Tab" : "Pin Tab");
 						item.mOnMenuItemSelected.Add(new (menu) =>
-							{
-								if (mIsRightTab)
-									IDEApp.sApp.MakeTabPermanent(this);
+						{
+							if (mIsRightTab)
+								IDEApp.sApp.MakeTabPermanent(this);
 
-								mTabbedView.TogglePinned(this);
-							});
+							mTabbedView.TogglePinned(this);
+						});
 					}
 
 					if (menu.mItems.Count > 0)
@@ -7165,14 +7214,14 @@ namespace IDE
 			SourceViewPanel sourceViewPanel = null;
 
 			WithTabs(scope [&] (tabButton) =>
+			{
+				if ((sourceViewPanel == null) && (tabButton.mContent is SourceViewPanel))
 				{
-					if ((sourceViewPanel == null) && (tabButton.mContent is SourceViewPanel))
-					{
-						var checkedResourceViewPanel = (SourceViewPanel)tabButton.mContent;
-						if (Path.Equals(checkedResourceViewPanel.mFilePath, useFilePath))
-							sourceViewPanel = checkedResourceViewPanel;
-					}
-				});
+					var checkedResourceViewPanel = (SourceViewPanel)tabButton.mContent;
+					if (Path.Equals(checkedResourceViewPanel.mFilePath, useFilePath))
+						sourceViewPanel = checkedResourceViewPanel;
+				}
+			});
 			return sourceViewPanel;
 		}
 
@@ -7211,37 +7260,37 @@ namespace IDE
 				return true;
 			var text = scope String();
 			if (LoadTextFile(editData.mFilePath, text, true, scope () =>
+			{
+				for (int i < text.Length)
 				{
-					for (int i < text.Length)
+					char8 c = text[i];
+					if (c == '\r')
 					{
-						char8 c = text[i];
-						if (c == '\r')
+						char8 nextC = 0;
+						if (i < text.Length - 1)
 						{
-							char8 nextC = 0;
-							if (i < text.Length - 1)
+							nextC = text[++i];
+							if (nextC == 0)
 							{
-								nextC = text[++i];
-								if (nextC == 0)
-								{
-									if (i < text.Length - 2)
-										nextC = text[++i];
-								}
+								if (i < text.Length - 2)
+									nextC = text[++i];
 							}
+						}
 
-							if (nextC == '\n')
-								editData.mLineEndingKind = .CrLf;
-							else
-								editData.mLineEndingKind = .Cr;
-							break;
-						}
-						else if (c == '\n')
-						{
-							editData.mLineEndingKind = .Lf;
-							break;
-						}
+						if (nextC == '\n')
+							editData.mLineEndingKind = .CrLf;
+						else
+							editData.mLineEndingKind = .Cr;
+						break;
 					}
-					editData.BuildHash(text);
-				}) case .Err)
+					else if (c == '\n')
+					{
+						editData.mLineEndingKind = .Lf;
+						break;
+					}
+				}
+				editData.BuildHash(text);
+			}) case .Err)
 				return false;
 			editData..GetFileTime();
 
@@ -7322,15 +7371,15 @@ namespace IDE
 						// This can happen if we rename a file to the name of a file that used to exist and is bound to
 						//  another source view panel
 						WithTabs(scope (tab) =>
+						{
+							if (var sourceViewPanel = tab.mContent as SourceViewPanel)
 							{
-								if (var sourceViewPanel = tab.mContent as SourceViewPanel)
+								if (sourceViewPanel.mEditData == oldEditData)
 								{
-									if (sourceViewPanel.mEditData == oldEditData)
-									{
-										tab.mTabbedView.RemoveTab(tab, true);
-									}
+									tab.mTabbedView.RemoveTab(tab, true);
 								}
-							});
+							}
+						});
 						for (var projectSource in oldEditData.mProjectSources)
 							projectSource.mEditData = editData;
 						gApp.ProcessDeferredDeletes();
@@ -7425,7 +7474,7 @@ namespace IDE
 						return null;
 					}
 					return binaryDataPanel;
-				}	
+				}
 			}
 
 			return .Err;
@@ -7490,26 +7539,26 @@ namespace IDE
 			if (showType != SourceShowType.New)
 			{
 				delegate void(TabbedView.TabButton) tabFunc = scope [&] (tabButton) =>
+				{
+					var darkTabButton = (DarkTabbedView.DarkTabButton)tabButton;
+					if (tabButton.mContent is ContentPanel)
 					{
-						var darkTabButton = (DarkTabbedView.DarkTabButton)tabButton;
-						if (tabButton.mContent is ContentPanel)
+						var checkContentPanel = (ContentPanel)tabButton.mContent;
+
+						if (checkContentPanel.FileNameMatches(useFilePath))
 						{
-							var checkContentPanel = (ContentPanel)tabButton.mContent;
-
-							if (checkContentPanel.FileNameMatches(useFilePath))
+							if (contentPanel != null)
 							{
-								if (contentPanel != null)
-								{
-									// Already found one that matches our active tabbed view?
-									if (contentPanelTab.mTabbedView == mActiveDocumentsTabbedView)
-										return;
-								}
-
-								contentPanel = checkContentPanel;
-								contentPanelTab = darkTabButton;
+								// Already found one that matches our active tabbed view?
+								if (contentPanelTab.mTabbedView == mActiveDocumentsTabbedView)
+									return;
 							}
+
+							contentPanel = checkContentPanel;
+							contentPanelTab = darkTabButton;
 						}
-					};
+					}
+				};
 
 				if ((showType == .ShowExistingInActivePanel) && (mActiveDocumentsTabbedView != null))
 				{
@@ -7526,7 +7575,7 @@ namespace IDE
 						MakeTabPermanent(contentPanelTab);
 					}
 
-					
+
 					if ((useProjectSource != null) &&
 						(contentPanel.mProjectSource != useProjectSource))
 					{
@@ -7651,9 +7700,9 @@ namespace IDE
 				return;
 
 			RecentFiles.UpdateMenu(mRecentlyDisplayedFiles, mWindowMenu, mRecentlyDisplayedFilesMenuItems, true, scope (idx, sysMenu) =>
-				{
-					sysMenu.mOnMenuItemSelected.Add(new (evt) => ShowRecentFile(idx));
-				});
+			{
+				sysMenu.mOnMenuItemSelected.Add(new (evt) => ShowRecentFile(idx));
+			});
 		}
 
 		public void UpdateRecentFileMenuItems(RecentFiles.RecentKind recentKind)
@@ -7663,9 +7712,9 @@ namespace IDE
 				return;
 
 			RecentFiles.UpdateMenu(entry.mList, entry.mMenu, entry.mMenuItems, false, scope (idx, sysMenu) =>
-				{
-					sysMenu.mOnMenuItemSelected.Add(new (evt) => ShowRecentFile(recentKind, idx));
-				});
+			{
+				sysMenu.mOnMenuItemSelected.Add(new (evt) => ShowRecentFile(recentKind, idx));
+			});
 
 			entry.mMenu.SetDisabled(entry.mMenuItems.Count == 0);
 		}
@@ -7793,7 +7842,8 @@ namespace IDE
 				fileName.Append("untitled");
 			Dialog aDialog = ThemeFactory.mDefault.CreateDialog("Save file?", scope String()..AppendF("Save changes to '{0}' before closing?", fileName), DarkTheme.sDarkTheme.mIconWarning);
 			aDialog.mDefaultButton = aDialog.AddButton("Save", new (evt) => { SaveFile(contentPanel); CloseDocument(contentPanel); });
-			// CloseDocument handles reverting a source panel; a binary panel's in-memory edits are simply discarded on close
+			// CloseDocument handles reverting a source panel; a binary panel's in-memory edits are simply discarded on
+			// close
 			aDialog.AddButton("Don't Save", new (evt) => CloseDocument(contentPanel));
 			aDialog.mEscButton = aDialog.AddButton("Cancel");
 			aDialog.PopupWindow(mMainWindow);
@@ -7883,13 +7933,13 @@ namespace IDE
 			DarkTabbedView tabbedView = null;
 			DarkTabbedView.DarkTabButton tabButton = null;
 			WithTabs(scope [?] (tab) =>
+			{
+				if (tab.mContent == documentPanel)
 				{
-					if (tab.mContent == documentPanel)
-					{
-						tabbedView = (DarkTabbedView)tab.mTabbedView;
-						tabButton = (DarkTabbedView.DarkTabButton)tab;
-					}
-				});
+					tabbedView = (DarkTabbedView)tab.mTabbedView;
+					tabButton = (DarkTabbedView.DarkTabButton)tab;
+				}
+			});
 
 			if (tabbedView == null)
 				return;
@@ -7937,12 +7987,12 @@ namespace IDE
 			if (tabButton.mIsActive)
 			{
 				tabbedView.WithTabs(scope [&] (checkTab) =>
-					{
-						if (checkTab == tabButton)
-							foundRemovedTab = true;
-						else if ((!foundRemovedTab) || (nextTab == null))
-							nextTab = checkTab;
-					});
+				{
+					if (checkTab == tabButton)
+						foundRemovedTab = true;
+					else if ((!foundRemovedTab) || (nextTab == null))
+						nextTab = checkTab;
+				});
 			}
 			else
 			{
@@ -8026,13 +8076,13 @@ namespace IDE
 				skipDocumentPanel = GetActiveDocumentPanel();
 
 			WithTabs(scope [&] (tab) =>
+			{
+				if ((tab.mContent is SourceViewPanel) || (tab.mTabbedView.mIsFillWidget))
 				{
-					if ((tab.mContent is SourceViewPanel) || (tab.mTabbedView.mIsFillWidget))
-					{
-						if (tab.mContent != skipDocumentPanel)
-							docPanels.Add(tab.mContent);
-					}
-				});
+					if (tab.mContent != skipDocumentPanel)
+						docPanels.Add(tab.mContent);
+				}
+			});
 
 			for (var docPanel in docPanels)
 				DocumentCloseClicked(docPanel);
@@ -8059,28 +8109,28 @@ namespace IDE
 		{
 			List<SourceViewPanel> pendingClosePanels = scope .();
 			WithSourceViewPanels(scope (sourceViewPanel) =>
+			{
+				if (sourceViewPanel.mProjectSource != null)
 				{
-					if (sourceViewPanel.mProjectSource != null)
+					var checkHash = gApp.mPackMan.GetHashFromFilePath(sourceViewPanel.mFilePath, .. scope .());
+					if (!checkHash.IsEmpty)
 					{
-						var checkHash = gApp.mPackMan.GetHashFromFilePath(sourceViewPanel.mFilePath, .. scope .());
-						if (!checkHash.IsEmpty)
+						bool foundHash = false;
+
+						if (gApp.mWorkspace.mProjectLockMap.TryGet(sourceViewPanel.mProjectSource.mProject.mProjectName, ?, var lock))
 						{
-							bool foundHash = false;
-
-							if (gApp.mWorkspace.mProjectLockMap.TryGet(sourceViewPanel.mProjectSource.mProject.mProjectName, ?, var lock))
+							if (lock case .Git(let url, let tag, let hash))
 							{
-								if (lock case .Git(let url, let tag, let hash))
-								{
-									if (hash == checkHash)
-										foundHash = true;
-								}
+								if (hash == checkHash)
+									foundHash = true;
 							}
-
-							if (!foundHash)
-								pendingClosePanels.Add(sourceViewPanel);
 						}
+
+						if (!foundHash)
+							pendingClosePanels.Add(sourceViewPanel);
 					}
-				});
+				}
+			});
 
 			for (var sourceViewPanel in pendingClosePanels)
 				CloseDocument(sourceViewPanel);
@@ -8108,15 +8158,15 @@ namespace IDE
 				{
 					DeleteAndNullify!(mDeferredShowSource);
 					mDeferredShowSource = new DeferredShowSource()
-						{
-							mFilePath = new .(filePath),
-							mShowHotIdx = (.)showHotIdx,
-							mRefHotIdx = (.)refHotIdx,
-							mLine = (.)line,
-							mColumn = (.)column,
-							mHilitePosition = hilitePosition,
-							mShowTemp = showTemp
-						};
+					{
+						mFilePath = new .(filePath),
+						mShowHotIdx = (.)showHotIdx,
+						mRefHotIdx = (.)refHotIdx,
+						mLine = (.)line,
+						mColumn = (.)column,
+						mHilitePosition = hilitePosition,
+						mShowTemp = showTemp
+					};
 					return null;
 				}
 
@@ -8353,7 +8403,8 @@ namespace IDE
 				}
 			}
 
-			// If we attach to an executable and we happen to have the Diassembly panel shown, STILL just show the source instead of the disassembly at first
+			// If we attach to an executable and we happen to have the Diassembly panel shown, STILL just show the
+			// source instead of the disassembly at first
 			if (mIsAttachPendingSourceShow)
 			{
 				mInDisassemblyView = false;
@@ -8393,7 +8444,8 @@ namespace IDE
 				var (sourceViewPanel, tabButton) = ShowSourceFile(filePath, null, SourceShowType.ShowExisting, setFocus);
 				if (sourceViewPanel != null)
 				{
-					sourceViewPanel.mIsSourceCode = true; // It's always source code, even if there is no extension (ie: stl types like "vector")
+					sourceViewPanel.mIsSourceCode = true; // It's always source code, even if there is no extension (ie:
+					// stl types like "vector")
 
 					if ((aliasFilePath != null) && (var svTabButton = tabButton as ContentTabButton))
 					{
@@ -8592,7 +8644,7 @@ namespace IDE
 						Fail("'-launchDir' can only be used after '-launch'");
 #if BF_PLATFORM_WINDOWS
 				case "-minidump":
-						String.NewOrSet!(mCrashDumpPath, value);
+					String.NewOrSet!(mCrashDumpPath, value);
 #endif
 				case "-platform":
 					if (mSetPlatformName == null)
@@ -8649,7 +8701,7 @@ namespace IDE
 						delete fullDir;
 					}
 					else*/
-						mWorkspace.mDir = fullDir;
+					mWorkspace.mDir = fullDir;
 				case "-file":
 					DragDropFile(value);
 				default:
@@ -8908,20 +8960,20 @@ namespace IDE
 					if (darkDockingFrame != null)
 					{
 						darkDockingFrame.WithAllDockedWidgets(scope (dockedWidget) =>
+						{
+							var tabbedView = dockedWidget as DarkTabbedView;
+							if (tabbedView != null)
 							{
-								var tabbedView = dockedWidget as DarkTabbedView;
-								if (tabbedView != null)
+								tabbedView.WithTabs(scope (tab) =>
 								{
-									tabbedView.WithTabs(scope (tab) =>
-										{
-											var panel = tab.mContent as Panel;
-											if ((panel != null) && (panel.mWidgetWindow == null))
-											{
-												panel.RehupScale(prevScale, DarkTheme.sScale);
-											}
-										});
-								}
-							});
+									var panel = tab.mContent as Panel;
+									if ((panel != null) && (panel.mWidgetWindow == null))
+									{
+										panel.RehupScale(prevScale, DarkTheme.sScale);
+									}
+								});
+							}
+						});
 					}
 
 					widgetWindow.mRootWidget.RehupSize();
@@ -10148,9 +10200,9 @@ namespace IDE
 						{
 							//foreach (var sourceViewPanel in GetSourceViewPanels())
 							WithSourceViewPanels(scope (sourceViewPanel) =>
-								{
-									sourceViewPanel.mHasChangedSinceLastCompile = false;
-								});
+							{
+								sourceViewPanel.mHasChangedSinceLastCompile = false;
+							});
 							compileInstance.mCompileResult = .Success;
 						}
 						else
@@ -10293,18 +10345,18 @@ namespace IDE
 					String filePath = new String(writeEmitCmd.mPath);
 
 					mBfBuildCompiler.DoBackground(new () =>
+					{
+						if (var project = mWorkspace.FindProject(projectName))
 						{
-							if (var project = mWorkspace.FindProject(projectName))
+							var bfProject = mBfBuildSystem.GetBfProject(project);
+							if (bfProject != null)
 							{
-								var bfProject = mBfBuildSystem.GetBfProject(project);
-								if (bfProject != null)
-								{
-									mBfBuildSystem.Lock(0);
-									mBfBuildCompiler.WriteEmitData(filePath, bfProject);
-									mBfBuildSystem.Unlock();
-								}
+								mBfBuildSystem.Lock(0);
+								mBfBuildCompiler.WriteEmitData(filePath, bfProject);
+								mBfBuildSystem.Unlock();
 							}
 						}
+					}
 						~
 						{
 							delete projectName;
@@ -10673,6 +10725,11 @@ namespace IDE
 		{
 			if (project.mFailed)
 				return null;
+
+			// Scratch resolve projects aren't part of the workspace and therefore have no
+			// config selection entry, but they still need options for the resolve system.
+			if (project.mIsScratch)
+				return project.GetOptions(mConfigName, mPlatformName, true);
 
 			Workspace.ConfigSelection configSelection = GetCurConfigSelection(project);
 			if (configSelection == null)
@@ -12346,16 +12403,16 @@ namespace IDE
 				{
 					mLastCompileSucceeded = true;
 					mWorkspace.WithProjectItems(scope (item) =>
+					{
+						if (var projectSource = item as ProjectSource)
 						{
-							if (var projectSource = item as ProjectSource)
+							if (IsBeefFile(projectSource.mPath))
 							{
-								if (IsBeefFile(projectSource.mPath))
-								{
-									if (!projectSource.mHasChangedSinceLastCompile)
-										projectSource.mHasChangedSinceLastSuccessfulCompile = false;
-								}
+								if (!projectSource.mHasChangedSinceLastCompile)
+									projectSource.mHasChangedSinceLastSuccessfulCompile = false;
 							}
-						});
+						}
+					});
 				}
 				else
 					mLastCompileHadMessages = true;
@@ -12546,37 +12603,37 @@ namespace IDE
 
 			bool hasTempFiles = false;
 			WithTabs(scope [&] (tabButton) =>
+			{
+				if (var svTabButton = tabButton as ContentTabButton)
 				{
-					if (var svTabButton = tabButton as ContentTabButton)
-					{
-						if (svTabButton.mIsTemp)
-							hasTempFiles = true;
-					}
-				});
+					if (svTabButton.mIsTemp)
+						hasTempFiles = true;
+				}
+			});
 
 			if (hasTempFiles)
 			{
 				var dialog = ThemeFactory.mDefault.CreateDialog("Close Temp Files",
 					"Do you want to close temporary files opened from the debugger?");
 				dialog.mDefaultButton = dialog.AddButton("Yes", new (evt) =>
+				{
+					List<ContentTabButton> closeTabs = scope .();
+					WithTabs(scope [&] (tabButton) =>
 					{
-						List<ContentTabButton> closeTabs = scope .();
-						WithTabs(scope [&] (tabButton) =>
-							{
-								if (var svTabButton = tabButton as ContentTabButton)
-								{
-									if (svTabButton.mIsTemp)
-										closeTabs.Add(svTabButton);
-								}
-							});
-						for (var tab in closeTabs)
+						if (var svTabButton = tabButton as ContentTabButton)
 						{
-							CloseDocument(tab.mContent);
+							if (svTabButton.mIsTemp)
+								closeTabs.Add(svTabButton);
 						}
 					});
-				dialog.AddButton("No", new (evt) =>
+					for (var tab in closeTabs)
 					{
-					});
+						CloseDocument(tab.mContent);
+					}
+				});
+				dialog.AddButton("No", new (evt) =>
+				{
+				});
 				dialog.PopupWindow(GetActiveWindow());
 			}
 
@@ -12624,9 +12681,9 @@ namespace IDE
 			startupCode.AppendF(
 				"""
 				using System;
-
+				
 				namespace {};
-
+				
 				class {}
 				{{
 					public static int Main(String[] args)
@@ -12704,12 +12761,12 @@ namespace IDE
 						, DarkTheme.sDarkTheme.mIconError);
 					dlg.mWindowFlags |= .Modal;
 					dlg.AddYesNoButtons(new (dlg) =>
-						{
-							AutoGenerateStartupCode(mWorkspace.mStartupProject);
-						},
+					{
+						AutoGenerateStartupCode(mWorkspace.mStartupProject);
+					},
 						new (dlg) =>
-						{
-						});
+					{
+					});
 					dlg.PopupWindow(GetActiveWindow());
 #else
 					OutputErrorLine("The project '{}' does not contain any source code. Run with '-generate' to auto-generate some startup code.", mWorkspace.mStartupProject.mProjectName);
@@ -12810,10 +12867,10 @@ namespace IDE
 
 					String delDirName = new String(tempDirName);
 					ThreadPool.QueueUserWorkItem(new () =>
-						{
-							Utils.DelTree(delDirName).IgnoreError();
-							delete delDirName;
-						});
+					{
+						Utils.DelTree(delDirName).IgnoreError();
+						delete delDirName;
+					});
 
 
 					bool worked = false;
@@ -12880,7 +12937,7 @@ namespace IDE
 					String err =
 						"""
 						Beef requires the Microsoft C++ build tools for Visual Studio 2013 or later, but they don't seem to be installed.
-
+						
 						Install just Microsoft Visual C++ Build Tools or the entire Visual Studio suite from:
 						    https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2026
 						""";
@@ -12891,17 +12948,17 @@ namespace IDE
 					DarkDialog dlg = new DarkDialog("Visual C++ Not Found", err, DarkTheme.sDarkTheme.mIconError);
 					dlg.mWindowFlags |= .Modal;
 					dlg.AddOkCancelButtons(new (dlg) =>
-						{
-							ProcessStartInfo psi = scope ProcessStartInfo();
-							psi.SetFileName("https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2026");
-							psi.UseShellExecute = true;
-							psi.SetVerb("Open");
-							var process = scope SpawnedProcess();
-							process.Start(psi).IgnoreError();
-						},
+					{
+						ProcessStartInfo psi = scope ProcessStartInfo();
+						psi.SetFileName("https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2026");
+						psi.UseShellExecute = true;
+						psi.SetVerb("Open");
+						var process = scope SpawnedProcess();
+						process.Start(psi).IgnoreError();
+					},
 						new (dlg) =>
-						{
-						});
+					{
+					});
 					((DarkButton)dlg.mButtons[0]).Label = "Open Link";
 					dlg.PopupWindow(GetActiveWindow());
 					Beep(.Error);
@@ -12917,7 +12974,8 @@ namespace IDE
 			Directory.CreateDirectory(compilerCacheFilePath).IgnoreError();
 			compilerCacheFilePath.Append("/cache.dat");
 
-			// Validate compiler cache - perform a clean build if a different compiler instance modified the files in the workspace build directory
+			// Validate compiler cache - perform a clean build if a different compiler instance modified the files in
+			// the workspace build directory
 			const uint64 cacheMagic = 0xBEEF0001;
 			(uint64 magic, uint64 id) cacheData = default;
 			int32 cacheSize = sizeof(decltype(cacheData));
@@ -12942,7 +13000,7 @@ namespace IDE
 			cacheData.magic = cacheMagic;
 			cacheData.id = mCompilerId;
 			File.WriteAll(compilerCacheFilePath, .((uint8*)(void*)&cacheData, cacheSize)).IgnoreError();
-			
+
 			if (mWantsBeefClean)
 			{
 				// We must finish cleaning before we can compile
@@ -13052,17 +13110,17 @@ namespace IDE
 			dbgVis.Append(mInstallDir, "BeefDbgVis.toml");
 
 			mWorkspace.WithProjectItems(scope (projectItem) =>
+			{
+				var projectSource = projectItem as ProjectSource;
+				if (projectSource == null)
+					return;
+				if ((projectSource.mName.StartsWith("BeefDbgVis")) &&
+					(projectSource.mName.EndsWith(".toml")))
 				{
-					var projectSource = projectItem as ProjectSource;
-					if (projectSource == null)
-						return;
-					if ((projectSource.mName.StartsWith("BeefDbgVis")) &&
-						(projectSource.mName.EndsWith(".toml")))
-					{
-						dbgVis.Append("\n");
-						projectSource.GetFullImportPath(dbgVis);
-					}
-				});
+					dbgVis.Append("\n");
+					projectSource.GetFullImportPath(dbgVis);
+				}
+			});
 
 			dbgVis.AppendF($"\n{mInstallDir}");
 			for (var project in mWorkspace.mProjects)
@@ -13076,7 +13134,6 @@ namespace IDE
 
 		protected virtual void StartupProject_SetupEnvVars(Dictionary<String, String> envVars)
 		{
-
 		}
 
 		public virtual bool StartupProject(bool doDebug, bool wasCompiled, DebugManager.OpenFileFlags debugFlags = .None)
@@ -13228,9 +13285,9 @@ namespace IDE
 			mDebugger.mIsRunning = true;
 			mDebugger.IncrementSessionIdx();
 			WithSourceViewPanels(scope (sourceView) =>
-				{
-					sourceView.RehupAlias();
-				});
+			{
+				sourceView.RehupAlias();
+			});
 
 			mDebugger.RehupBreakpoints(true);
 			mDebugger.Run();
@@ -13303,110 +13360,110 @@ namespace IDE
 			}
 
 			WithTabs(scope (tab) =>
-				{
-					if (tab.mContent == panel)
-						tab.Activate(setFocus);
-				});
+			{
+				if (tab.mContent == panel)
+					tab.Activate(setFocus);
+			});
 		}
 
 		public virtual Panel GetPanel(StringView name)
 		{
 			if (name == "CallStackPanel")
-			    return gApp.mCallStackPanel;
+				return gApp.mCallStackPanel;
 			else if (name == "BreakpointPanel")
-			    return gApp.mBreakpointPanel;
+				return gApp.mBreakpointPanel;
 			else if (name == "ProfilePanel")
 				return gApp.mProfilePanel;
 			else if (name == "OutputPanel")
-			{                
-			    return gApp.mOutputPanel;
+			{
+				return gApp.mOutputPanel;
 			}
 			else if (name == "TerminalPanel")
 			{
 #if BF_PLATFORM_WINDOWS
-			    return gApp.mTerminalPanel;
+				return gApp.mTerminalPanel;
 #endif
 			}
 			else if (name == "ImmediatePanel")
-			{                
-			    return gApp.mImmediatePanel;
+			{
+				return gApp.mImmediatePanel;
 			}
 			else if (name == "ErrorsPanel")
-			{                
-			    return gApp.mErrorsPanel;
+			{
+				return gApp.mErrorsPanel;
 			}
 			else if (name == "FindResultsPanel")
-			{                
-			    return gApp.mFindResultsPanel;
+			{
+				return gApp.mFindResultsPanel;
 			}
 			else if (name == "ProjectPanel")
-			{             
-			    return gApp.mProjectPanel;
+			{
+				return gApp.mProjectPanel;
 			}
 			else if (name == "ClassViewPanel")
-			{             
-			    return gApp.mClassViewPanel;
+			{
+				return gApp.mClassViewPanel;
 			}
 			else if (name == "PropertiesPanel")
-			{                
-			    return gApp.mPropertiesPanel;
+			{
+				return gApp.mPropertiesPanel;
 			}
 			else if (name == "SourceViewPanel")
 			{
-			    return new SourceViewPanel();
+				return new SourceViewPanel();
 			}
 			else if (name == "BinaryDataPanel")
 			{
-			    return new BinaryDataPanel();
+				return new BinaryDataPanel();
 			}
 			else if (name == "DisassemblyPanel")
 			{
-			    var disassemblyPanel = new DisassemblyPanel();
-			    disassemblyPanel.mIsInitialized = true;
-			    return disassemblyPanel;
+				var disassemblyPanel = new DisassemblyPanel();
+				disassemblyPanel.mIsInitialized = true;
+				return disassemblyPanel;
 			}
 			else if (name == "ThreadPanel")
 			{
-			    return gApp.mThreadPanel;
+				return gApp.mThreadPanel;
 			}
 			else if (name == "WatchPanel")
 			{
-			    return gApp.mWatchPanel;
+				return gApp.mWatchPanel;
 			}
 			else if (name == "AutoWatchPanel")
 			{
-			    return gApp.mAutoWatchPanel;
+				return gApp.mAutoWatchPanel;
 			}
 			else if (name == "MemoryPanel")
 			{
-			    return gApp.mMemoryPanel;
+				return gApp.mMemoryPanel;
 			}
 			else if (name == "DiagnosticsPanel")
 			{
-			    return gApp.mDiagnosticsPanel;
+				return gApp.mDiagnosticsPanel;
 			}
 			else if (name == "AutoCompletePanel")
 			{
-			    return gApp.mAutoCompletePanel;
+				return gApp.mAutoCompletePanel;
 			}
 			else if (name == "ModulePanel")
 			{
-			    return gApp.mModulePanel;
+				return gApp.mModulePanel;
 			}
 			else if (name == "BookmarksPanel")
-			{                
-			    return gApp.mBookmarksPanel;
+			{
+				return gApp.mBookmarksPanel;
 			}
 			else if (name == "TerminalPanel")
 			{
 #if BF_PLATFORM_WINDOWS
-			    return gApp.mTerminalPanel;
+				return gApp.mTerminalPanel;
 #endif
 			}
 			else if (name == "ConsolePanel")
 			{
 #if BF_PLATFORM_WINDOWS
-			    return gApp.mConsolePanel;
+				return gApp.mConsolePanel;
 #endif
 			}
 			return null;
@@ -13416,9 +13473,9 @@ namespace IDE
 		{
 			bool hasSourceShown = false;
 			WithSourceViewPanels(scope [&] (panel) =>
-				{
-					hasSourceShown = true;
-				});
+			{
+				hasSourceShown = true;
+			});
 			if (hasSourceShown)
 				return;
 
@@ -13427,17 +13484,17 @@ namespace IDE
 				bool didShow = false;
 
 				mWorkspace.mStartupProject.WithProjectItems(scope [&] (item) =>
-					{
-						if (didShow)
-							return;
+				{
+					if (didShow)
+						return;
 
-						if ((item.mName.Equals("main.bf", .OrdinalIgnoreCase)) ||
-							(item.mName.Equals("program.bf", .OrdinalIgnoreCase)))
-						{
-							ShowProjectItem(item, false);
-							didShow = true;
-						}
-					});
+					if ((item.mName.Equals("main.bf", .OrdinalIgnoreCase)) ||
+						(item.mName.Equals("program.bf", .OrdinalIgnoreCase)))
+					{
+						ShowProjectItem(item, false);
+						didShow = true;
+					}
+				});
 			}
 		}
 
@@ -13592,7 +13649,7 @@ namespace IDE
 			mOutputPanel.mAutoDelete = false;
 #if BF_PLATFORM_WINDOWS
 			mTerminalPanel = new TerminalPanel();
-			mTerminalPanel .Init();
+			mTerminalPanel.Init();
 			mTerminalPanel.mAutoDelete = false;
 			mConsolePanel = new ConsolePanel();
 			mConsolePanel.Init();
@@ -13725,7 +13782,6 @@ namespace IDE
 							Stop();
 							return;
 						}
-
 					}
 					mSettings.mTutorialsFinished.mRanDebug = true;
 				}
@@ -13949,7 +14005,7 @@ namespace IDE
 						mLaunchData.mTargetPath.Append("@gdb_wsl");
 					default:
 					}
-					
+
 					LaunchDialog.DoLaunch(null, mLaunchData.mTargetPath, mLaunchData.mArgs ?? "", mLaunchData.mWorkingDir ?? "", "", mLaunchData.mPaused, true);
 				}
 			}
@@ -14301,9 +14357,9 @@ namespace IDE
 			mExecutionPaused = true;
 			mDebugger.GetRunState();
 			WithWatchPanels(scope (watchPanel) =>
-				{
-					watchPanel.SetDisabled(false);
-				});
+			{
+				watchPanel.SetDisabled(false);
+			});
 			mMemoryPanel.SetDisabled(false);
 			mCallStackPanel.SetDisabled(false);
 		}
@@ -14334,9 +14390,9 @@ namespace IDE
 			mForegroundTargetCountdown = 30;
 			mExecutionPaused = false;
 			WithWatchPanels(scope (watchPanel) =>
-				{
-					watchPanel.SetDisabled(true);
-				});
+			{
+				watchPanel.SetDisabled(true);
+			});
 			mMemoryPanel.SetDisabled(true);
 			mCallStackPanel.SetDisabled(true);
 
@@ -14360,7 +14416,6 @@ namespace IDE
 
 		public virtual void HotCompileDone(bool success)
 		{
-
 		}
 
 		void FinishPendingHotResolve()
@@ -14431,37 +14486,37 @@ namespace IDE
 		void QueueProjectItems(Project project)
 		{
 			project.WithProjectItems(scope (projectItem) =>
+			{
+				var projectSource = projectItem as ProjectSource;
+				if (projectSource != null)
 				{
-					var projectSource = projectItem as ProjectSource;
-					if (projectSource != null)
-					{
-						if (projectSource.mIncludeKind == .Ignore)
-							return;
-						var resolveCompiler = GetProjectCompilerForFile(projectSource.mPath);
-						if (resolveCompiler == mBfResolveCompiler)
-							resolveCompiler.QueueProjectSource(projectSource, .None, false);
-						projectSource.mHasChangedSinceLastCompile = true;
-					}
-				});
+					if (projectSource.mIncludeKind == .Ignore)
+						return;
+					var resolveCompiler = GetProjectCompilerForFile(projectSource.mPath);
+					if (resolveCompiler == mBfResolveCompiler)
+						resolveCompiler.QueueProjectSource(projectSource, .None, false);
+					projectSource.mHasChangedSinceLastCompile = true;
+				}
+			});
 		}
 
 		void RemoveProjectItems(Project project)
 		{
 			project.WithProjectItems(scope (projectItem) =>
+			{
+				var projectSource = projectItem as ProjectSource;
+				if (projectSource != null)
 				{
-					var projectSource = projectItem as ProjectSource;
-					if (projectSource != null)
-					{
-						var resolveCompiler = GetProjectCompilerForFile(projectSource.mPath);
-						if ((resolveCompiler == mBfResolveCompiler) && (resolveCompiler != null))
-							resolveCompiler.QueueProjectSourceRemoved(projectSource);
+					var resolveCompiler = GetProjectCompilerForFile(projectSource.mPath);
+					if ((resolveCompiler == mBfResolveCompiler) && (resolveCompiler != null))
+						resolveCompiler.QueueProjectSourceRemoved(projectSource);
 
-						if (IsBeefFile(projectSource.mPath))
-						{
-							mBfBuildCompiler.QueueProjectSourceRemoved(projectSource);
-						}
+					if (IsBeefFile(projectSource.mPath))
+					{
+						mBfBuildCompiler.QueueProjectSourceRemoved(projectSource);
 					}
-				});
+				}
+			});
 		}
 
 		void UpdateCompilersAndDebugger()
@@ -14591,9 +14646,9 @@ namespace IDE
 						if (Directory.Exists(workspaceBuildDir))
 						{
 							var result = Utils.DelTree(workspaceBuildDir, scope (fileName) =>
-								{
-									return fileName.EndsWith("build.dat");
-								});
+							{
+								return fileName.EndsWith("build.dat");
+							});
 							if (result case .Err)
 							{
 								var str = scope String("Failed to delete folder: ", workspaceBuildDir);
@@ -15096,9 +15151,9 @@ namespace IDE
 					}
 					mMemoryPanel.SetDisabled(true);
 					WithWatchPanels(scope (watchPanel) =>
-						{
-							watchPanel.SetDisabled(true);
-						});
+					{
+						watchPanel.SetDisabled(true);
+					});
 					mIsAttachPendingSourceShow = false;
 				}
 
@@ -15436,45 +15491,45 @@ namespace IDE
 			RenameEditData(oldPath, newPath);
 
 			WithTabs(scope (tab) =>
+			{
+				var sourceViewPanel = tab.mContent as SourceViewPanel;
+				if (sourceViewPanel != null)
 				{
-					var sourceViewPanel = tab.mContent as SourceViewPanel;
-					if (sourceViewPanel != null)
+					if (Path.Equals(sourceViewPanel.mFilePath, oldPath))
 					{
-						if (Path.Equals(sourceViewPanel.mFilePath, oldPath))
-						{
-							var sourceViewTab = (IDEApp.ContentTabButton)tab;
+						var sourceViewTab = (IDEApp.ContentTabButton)tab;
 
-							sourceViewPanel.PathChanged(newPath);
+						sourceViewPanel.PathChanged(newPath);
+						tab.Label = newFileName;
+						float newWidth = sourceViewTab.GetWantWidth();
+						if (newWidth != tab.mWantWidth)
+						{
+							tab.mWantWidth = newWidth;
+							tab.mTabbedView.mNeedResizeTabs = true;
+						}
+					}
+					return;
+				}
+
+				if (let contentPanel = tab.mContent as ContentPanel)
+				{
+					if ((contentPanel.mFilePath != null) && (Path.Equals(contentPanel.mFilePath, oldPath)))
+					{
+						contentPanel.HandleFileRenamed(newPath);
+
+						if (let contentTab = tab as IDEApp.ContentTabButton)
+						{
 							tab.Label = newFileName;
-							float newWidth = sourceViewTab.GetWantWidth();
+							float newWidth = contentTab.GetWantWidth();
 							if (newWidth != tab.mWantWidth)
 							{
 								tab.mWantWidth = newWidth;
 								tab.mTabbedView.mNeedResizeTabs = true;
 							}
 						}
-						return;
 					}
-
-					if (let contentPanel = tab.mContent as ContentPanel)
-					{
-						if ((contentPanel.mFilePath != null) && (Path.Equals(contentPanel.mFilePath, oldPath)))
-						{
-							contentPanel.HandleFileRenamed(newPath);
-
-							if (let contentTab = tab as IDEApp.ContentTabButton)
-							{
-								tab.Label = newFileName;
-								float newWidth = contentTab.GetWantWidth();
-								if (newWidth != tab.mWantWidth)
-								{
-									tab.mWantWidth = newWidth;
-									tab.mTabbedView.mNeedResizeTabs = true;
-								}
-							}
-						}
-					}
-				});
+				}
+			});
 
 			var recentFileList = mRecentlyDisplayedFiles;
 			for (int32 recentFileIdx = 0; recentFileIdx < recentFileList.Count; recentFileIdx++)
@@ -15620,41 +15675,41 @@ namespace IDE
 
 				// Manually scan project files for changes
 				mWorkspace.WithProjectItems(scope (projectItem) =>
+				{
+					var projectSource = projectItem as ProjectSource;
+					if (projectSource != null)
 					{
-						var projectSource = projectItem as ProjectSource;
-						if (projectSource != null)
+						bool changed = false;
+						var editData = projectSource.mEditData;
+						if (editData != null)
 						{
-							bool changed = false;
-							var editData = projectSource.mEditData;
-							if (editData != null)
+							if (File.GetLastWriteTime(editData.mFilePath) case .Ok(let fileTime))
 							{
-								if (File.GetLastWriteTime(editData.mFilePath) case .Ok(let fileTime))
+								if (fileTime != projectSource.mEditData.mFileTime)
 								{
-									if (fileTime != projectSource.mEditData.mFileTime)
+									if (!projectSource.mEditData.mMD5Hash.IsZero)
 									{
-										if (!projectSource.mEditData.mMD5Hash.IsZero)
+										var text = scope String();
+										if (File.ReadAllText(editData.mFilePath, text, true) case .Ok)
 										{
-											var text = scope String();
-											if (File.ReadAllText(editData.mFilePath, text, true) case .Ok)
+											var hash = MD5.Hash(.((.)text.Ptr, text.Length));
+											if (hash != projectSource.mEditData.mMD5Hash)
 											{
-												var hash = MD5.Hash(.((.)text.Ptr, text.Length));
-												if (hash != projectSource.mEditData.mMD5Hash)
-												{
-													changed = true;
-												}
+												changed = true;
 											}
 										}
-										else
-											changed = true;
 									}
-
-									if (changed)
-										mFileWatcher.FileChanged(editData.mFilePath);
-									projectSource.mEditData.mFileTime = fileTime;
+									else
+										changed = true;
 								}
+
+								if (changed)
+									mFileWatcher.FileChanged(editData.mFilePath);
+								projectSource.mEditData.mFileTime = fileTime;
 							}
 						}
-					});
+					}
+				});
 			}
 		}
 
@@ -15723,12 +15778,12 @@ namespace IDE
 							var dialog = ThemeFactory.mDefault.CreateDialog("Reload Workspace?",
 								text);
 							dialog.AddYesNoButtons(new (dlg) =>
-								{
-									ReloadWorkspace();
-								},
+							{
+								ReloadWorkspace();
+							},
 								new (dlg) =>
-								{
-								});
+							{
+							});
 							dialog.PopupWindow(GetActiveWindow());
 							hadChange = true;
 						}
@@ -15829,17 +15884,17 @@ namespace IDE
 				// Non-source ContentPanels don't use the EditData/ProjectSource machinery below.
 				ContentPanel matchedContentPanel = null;
 				WithTabs(scope [&] (tabButton) =>
+				{
+					if (matchedContentPanel != null)
+						return;
+					if ((tabButton.mContent is SourceViewPanel))
+						return;
+					if (let contentPanel = tabButton.mContent as ContentPanel)
 					{
-						if (matchedContentPanel != null)
-							return;
-						if ((tabButton.mContent is SourceViewPanel))
-							return;
-						if (let contentPanel = tabButton.mContent as ContentPanel)
-						{
-							if (contentPanel.FileNameMatches(fileName))
-								matchedContentPanel = contentPanel;
-						}
-					});
+						if (contentPanel.FileNameMatches(fileName))
+							matchedContentPanel = contentPanel;
+					}
+				});
 
 				if ((matchedContentPanel != null) && (WantsFileChangeDialog(matchedContentPanel)))
 				{
@@ -15886,9 +15941,9 @@ namespace IDE
 					editData.mQueuedContent = new String();
 				editData.mQueuedContent.Clear();
 				if (LoadTextFile(fileName, editData.mQueuedContent, false, scope () =>
-					{
-						editData.BuildHash(editData.mQueuedContent);
-					}) case .Err(let err))
+				{
+					editData.BuildHash(editData.mQueuedContent);
+				}) case .Err(let err))
 				{
 					if (err case .OpenError(.SharingViolation))
 					{
@@ -16093,15 +16148,15 @@ namespace IDE
 					var dialog = ThemeFactory.mDefault.CreateDialog("Create Workspace?",
 						"Do you want to create an empty workspace or a new project?");
 					dialog.AddButton("Empty Workspace", new (evt) =>
-						{
-							mDeferredOpen = .NewWorkspace;
-						});
+					{
+						mDeferredOpen = .NewWorkspace;
+					});
 					dialog.AddButton("New Project", new (evt) =>
-						{
-							CloseWorkspace();
-							FinishShowingNewWorkspace();
-							Cmd_NewProject();
-						});
+					{
+						CloseWorkspace();
+						FinishShowingNewWorkspace();
+						Cmd_NewProject();
+					});
 					dialog.PopupWindow(GetActiveWindow());
 				case .NewWorkspace:
 
@@ -16116,13 +16171,13 @@ namespace IDE
 								scope String()..AppendF("A Beef workspace already exists at '{}'. Do you want to open it?", directoryPath),
 								DarkTheme.sDarkTheme.mIconWarning);
 							dialog.mDefaultButton = dialog.AddButton("Yes", new (evt) =>
-								{
-									DoOpenWorkspace(true);
-								});
+							{
+								DoOpenWorkspace(true);
+							});
 							dialog.AddButton("No", new (evt) =>
-								{
-									DeleteAndNullify!(mDeferredOpenFileName);
-								});
+							{
+								DeleteAndNullify!(mDeferredOpenFileName);
+							});
 							dialog.PopupWindow(GetActiveWindow());
 							return;
 						}
@@ -16132,13 +16187,13 @@ namespace IDE
 								scope String()..AppendF("A non-empty directory already exists at '{}'. Are you sure you want to create a workspace there?", directoryPath),
 								DarkTheme.sDarkTheme.mIconWarning);
 							dialog.mDefaultButton = dialog.AddButton("Yes", new (evt) =>
-								{
-									DoOpenWorkspace(true);
-								});
+							{
+								DoOpenWorkspace(true);
+							});
 							dialog.AddButton("No", new (evt) =>
-								{
-									DeleteAndNullify!(mDeferredOpenFileName);
-								});
+							{
+								DeleteAndNullify!(mDeferredOpenFileName);
+							});
 							dialog.PopupWindow(GetActiveWindow());
 							return;
 						}
@@ -16173,17 +16228,17 @@ namespace IDE
 
 				if (CheckCloseWorkspace(mMainWindow,
 					new () =>
-					{
-						DoDeferredOpen(_);
-					},
+				{
+					DoDeferredOpen(_);
+				},
 					new () =>
-					{
-						DoDeferredOpen(_);
-					},
+				{
+					DoDeferredOpen(_);
+				},
 					new () =>
-					{
-						DeleteAndNullify!(mDeferredOpenFileName);
-					}
+				{
+					DeleteAndNullify!(mDeferredOpenFileName);
+				}
 					))
 				{
 					DoDeferredOpen(_);
@@ -16200,17 +16255,17 @@ namespace IDE
 				return;
 
 			mWorkspace.WithProjectItems(scope (projectItem) =>
+			{
+				var projectSource = projectItem as ProjectSource;
+				if (projectSource != null)
 				{
-					var projectSource = projectItem as ProjectSource;
-					if (projectSource != null)
+					if ((projectSource.mEditData != null) && (projectSource.mEditData.HasTextChanged()))
 					{
-						if ((projectSource.mEditData != null) && (projectSource.mEditData.HasTextChanged()))
-						{
-							var sourceViewPanel = projectSource.mEditData?.mEditWidget.mPanel as SourceViewPanel;
-							Runtime.Assert(sourceViewPanel != null, "Source marked as modified with no SourceViewPanel");
-						}
+						var sourceViewPanel = projectSource.mEditData?.mEditWidget.mPanel as SourceViewPanel;
+						Runtime.Assert(sourceViewPanel != null, "Source marked as modified with no SourceViewPanel");
 					}
-				});
+				}
+			});
 		}
 
 		// Advances the build pipeline between frames so each queued step doesn't wait out a whole update tick
@@ -16425,9 +16480,9 @@ namespace IDE
 
 			mHaveSourcesChangedInternallySinceLastCompile = false;
 			WithSourceViewPanels(scope (sourceViewPanel) =>
-				{
-					mHaveSourcesChangedInternallySinceLastCompile |= sourceViewPanel.mHasChangedSinceLastCompile;
-				});
+			{
+				mHaveSourcesChangedInternallySinceLastCompile |= sourceViewPanel.mHasChangedSinceLastCompile;
+			});
 
 			if ((mCloseDelay > 0) && (--mCloseDelay == 0))
 				mMainWindow.Close();
