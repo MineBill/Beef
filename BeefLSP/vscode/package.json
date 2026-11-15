@@ -72,6 +72,13 @@
           },
           "default": [],
           "description": "Extra command line arguments passed to beeflsp."
+        },
+        "beef.server.diagnosticsDelayMs": {
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 5000,
+          "markdownDescription": "How long the document has to be idle before errors and warnings are recomputed. Lower values feel snappier but re-resolve more often; incremental resolves take roughly 100-250 ms."
         }
       }
     }

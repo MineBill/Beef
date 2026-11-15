@@ -25,6 +25,11 @@ BF_EXPORT void BF_CALLTYPE BfSystem_DeleteParser(Beefy::BfSystem* bfSystem, Beef
 BF_EXPORT Beefy::BfCompiler* BF_CALLTYPE BfSystem_CreateCompiler(Beefy::BfSystem* bfSystem, bool isResolveOnly);
 BF_EXPORT Beefy::BfPassInstance* BF_CALLTYPE BfSystem_CreatePassInstance(Beefy::BfSystem* bfSystem);
 BF_EXPORT void BF_CALLTYPE BfPassInstance_Delete(Beefy::BfPassInstance* bfPassInstance);
+BF_EXPORT int BF_CALLTYPE BfPassInstance_GetErrorCount(Beefy::BfPassInstance* bfPassInstance);
+BF_EXPORT const char* BF_CALLTYPE BfPassInstance_GetErrorData(Beefy::BfPassInstance* bfPassInstance, int errorIdx, int& outCode,
+	bool& outIsWarning, bool& outIsAfter, bool& outIsDeferred, Beefy::BfWhileSpecializingFlags& outIsWhileSpecializing,
+	bool& outIsPersistent, char*& projectName, char*& fileName, int& outSrcStart, int& outSrcEnd, int* outLine, int* outColumn,
+	int& outMoreInfoCount);
 
 BF_EXPORT void BF_CALLTYPE BfSystem_Lock(Beefy::BfSystem* bfSystem, int priority);
 BF_EXPORT void BF_CALLTYPE BfSystem_Unlock(Beefy::BfSystem* bfSystem);

@@ -16,6 +16,7 @@ struct ProjectInfo
 	int mTargetType = 2;
 	bool mDisabled = false;
 	std::vector<std::string> mSources;      // normalized absolute paths
+	std::vector<std::string> mSourceDirs;   // AutoFolder entries to scan recursively
 	std::vector<std::string> mDependencies; // project names
 };
 

@@ -178,7 +178,18 @@ bool Workspace::Discover(const std::string& rootPath, std::string& outError)
 		}
 
 		std::vector<std::string> sources;
-		CollectSources(project.mDir, sources);
+		// The IDE auto-includes <project>/src by default (see
+		// Project.SetupDefault); anything else has to be listed explicitly as
+		// ProjectFolder.Items, so don't walk the whole project directory.
+		std::string sourceDir = JoinPath(project.mDir, "src");
+		if (IsDirectory(sourceDir))
+			CollectSources(sourceDir, sources);
+		else
+			CollectSources(project.mDir, sources);
+
+		for (const auto& autoDir : project.mSourceDirs)
+			CollectSources(autoDir, sources);
+
 		for (const auto& extraSource : project.mSources)
 		{
 			if (std::find(sources.begin(), sources.end(), extraSource) == sources.end())
@@ -409,7 +420,18 @@ bool Workspace::LoadProject(const std::string& name, const std::string& dir, con
 					continue;
 				if ((pathValue == NULL) || !pathValue->is<std::string>())
 					continue;
-				if (typeValue->as<std::string>() != "Source")
+
+				std::string itemType = typeValue->as<std::string>();
+				std::string itemPath = JoinPath(normalizedDir, pathValue->as<std::string>());
+
+				if (itemType == "AutoFolder")
+				{
+					if (IsDirectory(itemPath))
+						existing->mSourceDirs.push_back(itemPath);
+					continue;
+				}
+
+				if (itemType != "Source")
 					continue;
 
 				// C/C++ projects list their .cpp/.h files as source items too;
@@ -417,9 +439,8 @@ bool Workspace::LoadProject(const std::string& name, const std::string& dir, con
 				if (!EndsWith(pathValue->as<std::string>(), ".bf"))
 					continue;
 
-				std::string sourcePath = JoinPath(normalizedDir, pathValue->as<std::string>());
-				if (PathExists(sourcePath))
-					existing->mSources.push_back(sourcePath);
+				if (PathExists(itemPath))
+					existing->mSources.push_back(itemPath);
 			}
 		}
 	}

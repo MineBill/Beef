@@ -6,9 +6,10 @@ reimplementation: the same `BfSystem` / `BfParser` / `BfCompiler` /
 `BfAutoComplete` pipeline that the IDE drives through its extern calls is driven
 here from C++.
 
-Current feature set (v1): **completion**, with `completionItem/resolve`
-documentation and trigger on `.`. Everything else is intentionally absent for
-now; see "Next steps" below.
+Current feature set: **completion** (with `completionItem/resolve`
+documentation and trigger on `.`) and **diagnostics** (errors and warnings from
+the resolve pass, plus live syntax errors for the file being edited). Everything
+else is intentionally absent for now; see "Known limitations" below.
 
 ## How it works
 
@@ -19,7 +20,8 @@ initialize / didOpen / didChange          (LSP, stdio)
         └─ BeefCompilerHost       src/BeefCompiler.cpp
              ├─ BfSystem_Create / BfSystem_CreateProject / BfProject_SetOptions
              ├─ per source: BfParser_SetSource -> Parse -> Reduce -> BuildDefs
-             ├─ BfCompiler_Compile("")      <- resolves the whole workspace once
+             ├─ BfCompiler_ClassifySource      <- resolves the whole workspace once
+             │    └─ BfPassInstance_GetErrorData  -> publishDiagnostics
              └─ per request: SetAutocomplete(cursor) -> Parse -> Reduce
                              -> BuildDefs -> CreateClassifier
                              -> BfCompiler_ClassifySource     (autocomplete pass)
@@ -27,6 +29,10 @@ initialize / didOpen / didChange          (LSP, stdio)
                   └─ CompletionParser  src/CompletionParser.cpp  (line protocol -> entries)
                        └─ CompletionItem[] with textEdit over the compiler's insertRange
 ```
+
+`didOpen`/`didChange` additionally run a parse-only pass for the edited document
+(`BeefCompilerHost::AnalyzeFile`) so syntax errors show up while typing; the full
+resolve diagnostics replace them after the next workspace resolve.
 
 The first `initialized` (or the first completion request) triggers a one-time
 resolve-only compile of every project in the workspace, including `corlib` and
@@ -118,9 +124,10 @@ folder that contains `BeefSpace.toml`.
    executable (`<Beef>/BeefLibs/corlib` for this repository), in `BEEF_PATH`,
    or in `C:/Beef`. If it cannot be found the server reports that instead of
    resolving (and crashing).
-4. Sources are every `.bf` file under the project directory (skipping `obj`,
-   `build`, `bin`, `temp` and dot-directories) plus explicit
-   `[[ProjectFolder.Items]] Type = "Source"` entries.
+4. Sources are the `.bf` files under `<project>/src` (the IDE's default
+   auto-included folder), plus any `[[ProjectFolder.Items]] Type = "AutoFolder"`
+   directories and explicit `Type = "Source"` files. Files elsewhere in the
+   project directory are not compiled, just like in the IDE.
 5. C/C++ and custom-build projects (`IDEHelper`, `BeefySysLib`, `Debugger64`,
    ...) are ignored: they contribute no Beef type definitions.
 
@@ -129,28 +136,46 @@ immediate subdirectories for `BeefProj.toml`.
 
 ## Resolution model
 
-The first `initialized` (or the first completion request) runs a one-time
+All compiler work runs on a dedicated worker thread; the message loop only reads
+and writes JSON-RPC. The reader, worker and main thread communicate through
+queues, so a long resolve never stops the server from answering.
+
+The first `initialized` (or the first completion request) queues a one-time
 resolve-only compile of every Beef project in the workspace. That is what makes
-member completion on library types (`Console.`, `String.`, ...) work.
+member completion on library types (`Console.`, `String.`, ...) work. It takes
+roughly 3.5 s for the IDE workspace with the compiler's worker threads enabled.
 
 After that, each completion request runs only the single-file autocomplete
 resolve pass, which is fast (single-digit milliseconds) and never reshapes the
 project type graph. If a request comes back empty *and* the document text has
 diverged from what was last resolved, the server assumes new type definitions
 were introduced (for example a renamed class), re-parses that file, re-resolves
-the workspace and retries the request once. That path takes roughly a second on
-the IDE workspace, so it is triggered as rarely as possible.
+the workspace and retries the request once. Incremental re-resolves cost
+~100-250 ms on the IDE workspace.
+
+## Diagnostics
+
+The resolve publishes the errors and warnings it produced, with `source: "beef"`,
+error/warning severity and warning codes (e.g. `CS0168`). No request is needed:
+after a document has been quiet for 150 ms a parse-only pass refreshes its syntax
+errors, and after 300 ms (or immediately on save) the file's definitions are
+re-parsed and the workspace is re-resolved incrementally, which refreshes the
+semantic errors as well. On the IDE workspace that turns an edit into updated
+diagnostics in roughly 400-500 ms. The delay is configurable through the
+`diagnosticsDelayMs` initialization option (`beef.server.diagnosticsDelayMs` in
+the VS Code extension). Files that are no longer mentioned are cleared.
 
 ## Known limitations
 
 * Full document sync (`textDocumentSync.change = 1`). Fine for typical files,
   but every keystroke re-sends the document.
-* No diagnostics, hover, definition, references, rename, signature help,
-  formatting or semantic tokens yet. The compiler endpoints for those
-  (`BfResolveType_*`) are already reachable from `BeefCompilerHost`.
-* Configuration-specific preprocessor defines (`[Configs.*]`,
-  `DistinctOptions`) are not applied yet; resolution runs with defaults.
-* Requests are handled synchronously, so `$/cancelRequest` is ignored and the
-  initial workspace resolve blocks the message loop.
+* No hover, definition, references, rename, signature help, formatting or
+  semantic tokens yet. The compiler endpoints for those (`BfResolveType_*`) are
+  already reachable from `BeefCompilerHost`.
+* Only the macros the IDE always defines are passed (`BF_MACHINE_X64`,
+  `BF_PLATFORM_WINDOWS`/`BF_PLATFORM_LINUX`); configuration-specific defines
+  (`[Configs.*]`, `DistinctOptions`, project `PreprocessorMacros`) are not.
+* Requests are queued but `$/cancelRequest` is ignored, so a superseded
+  completion still runs.
 * On Windows the server links `IDE/dist/IDEHelper64{,_d}.lib`, so the checkout
   has to be built once with `bin/build.bat`.

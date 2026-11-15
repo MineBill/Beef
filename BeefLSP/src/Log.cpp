@@ -2,12 +2,16 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include <mutex>
 
 namespace beflsp
 {
 
+static std::mutex sLogMutex;
+
 void LogV(const char* fmt, va_list args)
 {
+	std::lock_guard<std::mutex> lock(sLogMutex);
 	fputs("[beeflsp] ", stderr);
 	vfprintf(stderr, fmt, args);
 	fputc('\n', stderr);

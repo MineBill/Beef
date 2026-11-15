@@ -8,10 +8,12 @@ parent directory), which drives the same C++ compiler frontend as the Beef IDE.
 * `.bf` file association, syntax highlighting and comment/bracket/indent rules.
 * Completion (including member completion from `corlib` and project
   dependencies) with documentation on resolve.
+* Diagnostics for errors and warnings. Semantic errors refresh a few hundred ms
+  after you stop typing (immediately on save), syntax errors sooner.
 * Status bar entry and a `Beef: Restart Language Server` command.
 
-Diagnostics, hover, go-to-definition and the rest are not implemented in the
-server yet.
+Hover, go-to-definition, references, rename, signature help and formatting are
+not implemented in the server yet.
 
 ## Requirements
 
@@ -69,6 +71,7 @@ code --install-extension beeflsp-0.1.0.vsix
 | --- | --- | --- |
 | `beef.server.path` | `""` | Absolute path to `beeflsp`. Empty means auto-detect. |
 | `beef.server.extraArgs` | `[]` | Extra arguments passed to the server. |
+| `beef.server.diagnosticsDelayMs` | `300` | Idle time before semantic errors are recomputed. Lower means snappier but more re-resolves; `0` refreshes as soon as you pause. |
 
 Changing either setting restarts the server. The output channel
 `Beef Language Server` contains the server's stderr log, which is where

@@ -126,6 +126,9 @@ async function startClient(): Promise<void> {
     const clientOptions: LanguageClientOptions = {
         documentSelector: [{ scheme: 'file', language: 'beef' }],
         outputChannel: getOutputChannel(),
+        initializationOptions: {
+            diagnosticsDelayMs: configuration.get<number>('server.diagnosticsDelayMs') ?? 300,
+        },
         synchronize: {
             configurationSection: 'beef',
         },

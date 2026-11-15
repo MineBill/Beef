@@ -17,6 +17,27 @@ class BfParser;
 namespace beflsp
 {
 
+struct Diagnostic
+{
+	std::string mFile;   // normalized path as reported by the compiler
+	int mLine = 0;       // 0-based
+	int mColumn = 0;     // 0-based, UTF-16 code units
+	int mEndLine = 0;
+	int mEndColumn = 0;
+	std::string mMessage;
+	bool mIsWarning = false;
+	int mCode = 0;
+};
+
+struct DefinitionLocation
+{
+	std::string mFile;
+	int mLine = 0;       // 0-based
+	int mColumn = 0;     // 0-based, UTF-16 code units
+	int mEndLine = 0;
+	int mEndColumn = 0;
+};
+
 // Owns a BfSystem/BfCompiler pair and drives the same resolve passes the IDE
 // runs: load every project source, resolve the whole workspace once, then run
 // single-file autocomplete passes on top of that resolved state.
@@ -33,12 +54,25 @@ public:
 	bool Autocomplete(const std::string& filePath, const std::string& text, int cursorOffset,
 		std::string& outInfo, std::string& outError);
 
+	// Diagnostics from the most recent workspace resolve, in file order.
+	const std::vector<Diagnostic>& GetCompileDiagnostics() const { return mCompileDiagnostics; }
+
+	// Re-parses 'filePath' with the given text, publishes its type definitions
+	// and resolves the workspace again.
+	void RefreshFile(const std::string& filePath, const std::string& text);
+
+	// Resolves the symbol at 'cursorOffset' and returns where it is declared.
+	bool GoToDefinition(const std::string& filePath, const std::string& text, int cursorOffset,
+		std::vector<DefinitionLocation>& outLocations, std::string& outError);
+
+	// Syntax-only analysis of one document (parse + reduce, no type checking).
+	void AnalyzeFile(const std::string& filePath, const std::string& text, std::vector<Diagnostic>& outDiagnostics);
+
 private:
 	Beefy::BfProject* GetOrCreateProject(const ProjectInfo& projectInfo);
 	bool LoadSource(Beefy::BfProject* bfProject, const std::string& path, const std::string& text);
 	bool CompileAll(std::string& outError);
 	bool RunAutocompletePass(const std::string& filePath, const std::string& text, int cursorOffset, std::string& outInfo);
-	bool RefreshFile(const std::string& filePath, const std::string& text);
 	const ProjectInfo* GetProjectForFile(const std::string& filePath) const;
 
 	Beefy::BfSystem* mSystem = NULL;
@@ -53,6 +87,8 @@ private:
 	// Last parser and source text that were fed into the type graph per file.
 	std::map<std::string, Beefy::BfParser*> mFileParsers;
 	std::map<std::string, std::string> mResolvedTexts;
+
+	std::vector<Diagnostic> mCompileDiagnostics;
 };
 
 }
