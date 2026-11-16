@@ -1,5 +1,6 @@
 #include "BeefCompiler.h"
 #include "CompletionParser.h"
+#include "DapServer.h"
 #include "LspText.h"
 #include "Server.h"
 #include "Workspace.h"
@@ -153,6 +154,15 @@ int main(int argc, char** argv)
 		std::string arg = argv[1];
 		if ((arg == "--completion") && (argc >= 6))
 			return RunCompletion(argv[2], argv[3], atoi(argv[4]), atoi(argv[5]));
+		if (arg == "--debug-adapter")
+		{
+#ifdef _WIN32
+			_setmode(_fileno(stdin), _O_BINARY);
+			_setmode(_fileno(stdout), _O_BINARY);
+#endif
+			beflsp::DapServer dapServer;
+			return dapServer.Run();
+		}
 		if ((arg == "--version") || (arg == "-v"))
 		{
 			printf("beeflsp 0.1.0\n");
@@ -163,6 +173,7 @@ int main(int argc, char** argv)
 			printf("beeflsp - Beef language server (completion)\n"
 				"Speaks the Language Server Protocol over stdin/stdout.\n\n"
 				"  beeflsp                      run the language server\n"
+				"  beeflsp --debug-adapter      run the Debug Adapter Protocol server\n"
 				"  beeflsp --completion <root> <file> <line> <character>\n"
 				"                               run one autocomplete request and print the result\n");
 			return 0;

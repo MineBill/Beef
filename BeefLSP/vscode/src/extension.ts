@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import {
@@ -6,10 +5,14 @@ import {
     LanguageClientOptions,
     ServerOptions,
 } from 'vscode-languageclient/node';
+import { BeefDebugAdapterFactory, BeefDebugConfigurationProvider } from './beefDebug';
+import { findServer } from './beefProject';
+import { BeefTaskProvider, BEEF_TASK_TYPE } from './beefTasks';
 
 const CLIENT_ID = 'beeflsp';
 const CLIENT_NAME = 'Beef Language Server';
 const EMIT_SCHEME = 'beef-emit';
+const DEBUG_TYPE = 'beef';
 
 interface EmitSourceResult {
     text: string;
@@ -114,18 +117,6 @@ function setStatus(text: string, tooltip: string): void {
     statusBar.tooltip = tooltip;
 }
 
-function serverExecutableName(): string {
-    return process.platform === 'win32' ? 'beeflsp.exe' : 'beeflsp';
-}
-
-function isFile(candidate: string): boolean {
-    try {
-        return fs.statSync(candidate).isFile();
-    } catch {
-        return false;
-    }
-}
-
 function expandUserPath(value: string): string {
     const trimmed = value.trim();
     if (trimmed === '~' || trimmed.startsWith('~/') || trimmed.startsWith('~\\')) {
@@ -135,55 +126,11 @@ function expandUserPath(value: string): string {
     return trimmed;
 }
 
-function findOnPath(): string | undefined {
-    const executable = serverExecutableName();
-    for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
-        if (!dir) {
-            continue;
-        }
-        const candidate = path.join(dir, executable);
-        if (isFile(candidate)) {
-            return candidate;
-        }
-    }
-    return undefined;
-}
-
-interface ServerLookup {
-    serverPath?: string;
-    problem?: string;
-}
-
-function findServer(): ServerLookup {
-    const configuration = vscode.workspace.getConfiguration('beef');
-    const configured = expandUserPath(configuration.get<string>('server.path') ?? '');
-    if (configured) {
-        if (isFile(configured)) {
-            return { serverPath: configured };
-        }
-        return { problem: `"beef.server.path" points at '${configured}', which does not exist.` };
-    }
-
-    const executable = serverExecutableName();
-    const relativeDirectories = ['build-lsp/bin', 'build/bin', 'BeefLSP/build/bin', 'IDE/dist'];
-    for (const folder of vscode.workspace.workspaceFolders ?? []) {
-        for (const relativeDirectory of relativeDirectories) {
-            const candidate = path.join(folder.uri.fsPath, relativeDirectory, executable);
-            if (isFile(candidate)) {
-                return { serverPath: candidate };
-            }
-        }
-    }
-
-    const fromPath = findOnPath();
-    if (fromPath) {
-        return { serverPath: fromPath };
-    }
-
-    return {
-        problem: `Could not find '${executable}'. Set "beef.server.path" or build it with: ` +
-            'cmake -S BeefLSP -B build-lsp -G Ninja -DCMAKE_BUILD_TYPE=Release',
-    };
+/** `beef.sdk.path` as a usable path, or undefined when it is not configured. */
+function configuredSdkPath(): string | undefined {
+    const value = vscode.workspace.getConfiguration('beef').get<string>('sdk.path') ?? '';
+    const trimmed = value.trim().replace(/^["']|["']$/g, '');
+    return trimmed ? expandUserPath(trimmed) : undefined;
 }
 
 async function startClient(): Promise<void> {
@@ -201,12 +148,16 @@ async function startClient(): Promise<void> {
     const configuration = vscode.workspace.getConfiguration('beef');
     const extraArgs = configuration.get<string[]>('server.extraArgs') ?? [];
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const sdkPath = configuredSdkPath();
 
     const serverOptions: ServerOptions = {
         command: lookup.serverPath,
         args: extraArgs,
         options: {
             cwd: workspaceFolder?.uri.fsPath,
+            // The server locates corlib and other dependencies through
+            // BEEF_PATH when the workspace does not pin them itself.
+            env: sdkPath ? { ...process.env, BEEF_PATH: sdkPath } : undefined,
         },
     };
 
@@ -263,8 +214,11 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(EMIT_SCHEME, new EmitContentProvider()));
     context.subscriptions.push(vscode.commands.registerCommand('beef.showEmit', showEmit));
     context.subscriptions.push(vscode.commands.registerCommand('beef.restartServer', restartClient));
+    context.subscriptions.push(vscode.tasks.registerTaskProvider(BEEF_TASK_TYPE, new BeefTaskProvider()));
+    context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider(DEBUG_TYPE, new BeefDebugConfigurationProvider()));
+    context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory(DEBUG_TYPE, new BeefDebugAdapterFactory()));
     context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((event) => {
-        if (event.affectsConfiguration('beef.server')) {
+        if (event.affectsConfiguration('beef.server') || event.affectsConfiguration('beef.sdk.path')) {
             void restartClient();
         }
     }));

@@ -160,11 +160,39 @@ handy to check that the workspace resolves:
 ./build-lsp/bin/beeflsp --completion <workspaceRoot> <file.bf> <line> <character>
 ```
 
+## Debugging
+
+`beeflsp --debug-adapter` runs a Debug Adapter Protocol server on stdio — the
+same binary and the same `Content-Length` framing as the language server. VS Code
+spawns one process per debug session, so the debugger's process-wide state stays
+isolated from the language server.
+
+It is a front end to the compiler-side debugger used by the IDE
+(`IDEHelper/DebugManager.cpp`, `WinDebugger` on Windows, LLDB or GDB on Linux):
+`launch` opens the target with redirected stdio (forwarded as `output` events),
+`setBreakpoints` creates Beef breakpoints (conditions, hit counts and log points
+included), and the pump thread turns `Debugger_Update()`/`Debugger_PopMessage()`
+into `stopped`/`output`/`terminated` events. `threads`, `stackTrace`, `scopes`,
+`variables` and `evaluate` read from `Debugger_GetThreadInfo`,
+`CallStack_*` and `Debugger_Evaluate`, so values render with Beef semantics and
+the SDK's `BeefDbgVis.toml` visualizers (strings, arrays, collections).
+
+Implemented: `initialize`, `launch`, `setBreakpoints`, `configurationDone`,
+`threads`, `stackTrace`, `scopes`, `variables`, `evaluate`, `continue`, `next`,
+`stepIn`, `stepOut`, `pause`, `disconnect`, `terminate`. Not yet: `attach`,
+`setVariable`, exception filters, function breakpoints, restart.
+
+The debugger needs the compiler's X86 target (`Targets_Create()`), and on
+Windows the engines live inside `IDEHelper64.dll` (the `Debugger32`/`Debugger64`
+static libraries), which is already shipped next to `beeflsp`.
+
 ## Editor integration
 
 `vscode/` contains a VS Code extension that starts `beeflsp`, registers `.bf`
-files and ships syntax highlighting. See `vscode/README.md` for building the
-extension and locating the server binary.
+files and ships syntax highlighting. It also registers `beef` build tasks
+(BeefBuild) and a `beef` launch configuration backed by
+`beeflsp --debug-adapter`. See `vscode/README.md` for building the extension,
+the task matrix and locating the tools.
 
 `vscode/schemas/` holds JSON schemas for `BeefProj.toml` and `BeefSpace.toml`
 covering every key BeefBuild reads. No editor integration uses them yet; they are

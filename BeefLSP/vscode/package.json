@@ -21,7 +21,10 @@
     "lsp"
   ],
   "activationEvents": [
-    "onLanguage:beef"
+    "onLanguage:beef",
+    "workspaceContains:**/BeefSpace.toml",
+    "workspaceContains:**/BeefProj.toml",
+    "onDebugResolve:beef"
   ],
   "main": "./dist/extension.js",
   "capabilities": {
@@ -51,6 +54,11 @@
         "path": "./syntaxes/beef.tmLanguage.json"
       }
     ],
+    "breakpoints": [
+      {
+        "language": "beef"
+      }
+    ],
     "commands": [
       {
         "command": "beef.restartServer",
@@ -59,6 +67,120 @@
       {
         "command": "beef.showEmit",
         "title": "Beef: Show Generated Code"
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "type": "beef",
+        "required": [
+          "command"
+        ],
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "build",
+              "run",
+              "test",
+              "clean"
+            ],
+            "description": "What BeefBuild should do."
+          },
+          "config": {
+            "type": "string",
+            "description": "Configuration to build (Debug, Release, ...). Defaults to the workspace's first configuration."
+          },
+          "platform": {
+            "type": "string",
+            "description": "Platform to build (Win64, Linux64, ...). Defaults to the workspace's first platform."
+          }
+        }
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "beef",
+        "label": "Beef",
+        "languages": [
+          "beef"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "required": [],
+            "properties": {
+              "project": {
+                "type": "string",
+                "description": "Project to launch. Defaults to the workspace's startup project."
+              },
+              "config": {
+                "type": "string",
+                "description": "Build configuration (Debug, Release, ...). Defaults to the workspace's first configuration."
+              },
+              "platform": {
+                "type": "string",
+                "description": "Platform (Win64, Linux64, ...). Defaults to the workspace's first platform."
+              },
+              "program": {
+                "type": "string",
+                "description": "Binary to launch. Defaults to build/<Config>_<Platform>/<Project>/<Project>[.exe]."
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "default": [],
+                "description": "Command line arguments passed to the program."
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Working directory of the program. Defaults to the directory of the binary."
+              },
+              "buildBeforeLaunch": {
+                "type": "boolean",
+                "default": true,
+                "description": "Run the matching BeefBuild task before launching."
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "default": false,
+                "description": "Stop at the program entry point instead of running to the first breakpoint."
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "name": "Beef: Debug",
+            "type": "beef",
+            "request": "launch",
+            "buildBeforeLaunch": true
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "Beef: Launch the startup project",
+            "description": "Build and debug the workspace's startup project.",
+            "body": {
+              "name": "Beef: Debug",
+              "type": "beef",
+              "request": "launch",
+              "buildBeforeLaunch": true
+            }
+          },
+          {
+            "label": "Beef: Launch a configuration and platform",
+            "description": "Build and debug a specific configuration and platform.",
+            "body": {
+              "name": "Beef: Debug Win64",
+              "type": "beef",
+              "request": "launch",
+              "config": "Debug",
+              "platform": "Win64",
+              "buildBeforeLaunch": true
+            }
+          }
+        ]
       }
     ],
     "configuration": {
@@ -83,6 +205,18 @@
           "minimum": 0,
           "maximum": 5000,
           "markdownDescription": "How long the document has to be idle before errors and warnings are recomputed. Lower values feel snappier but re-resolve more often; incremental resolves take roughly 100-250 ms."
+        },
+        "beef.buildTool.path": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "markdownDescription": "Absolute path to `BeefBuild`/`BeefBuild.exe`. Takes precedence over `#beef.sdk.path#`."
+        },
+        "beef.sdk.path": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "markdownDescription": "Absolute path to the Beef SDK (the installation folder that contains `IDE/dist/BeefBuild` and `BeefLibs/corlib`). When empty, the SDK is discovered next to the workspace, from the workspace's `corlib` path, or on `PATH`."
         }
       }
     }

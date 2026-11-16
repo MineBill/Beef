@@ -34,6 +34,7 @@ set(BEEFLSP_SRC
   src/BeefCompiler.cpp
   src/CompletionParser.cpp
   src/Server.cpp
+  src/DapServer.cpp
 )
 
 add_executable(beeflsp ${BEEFLSP_SRC})
