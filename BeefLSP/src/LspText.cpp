@@ -167,6 +167,16 @@ static std::string PercentEncode(const std::string& str)
 	return result;
 }
 
+std::string EncodeUriComponent(const std::string& value)
+{
+	return PercentEncode(value);
+}
+
+std::string DecodeUriComponent(const std::string& value)
+{
+	return PercentDecode(value);
+}
+
 bool UriToPath(const std::string& uri, std::string& outPath)
 {
 	const std::string prefix = "file://";

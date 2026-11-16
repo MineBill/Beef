@@ -55,6 +55,10 @@
       {
         "command": "beef.restartServer",
         "title": "Beef: Restart Language Server"
+      },
+      {
+        "command": "beef.showEmit",
+        "title": "Beef: Show Generated Code"
       }
     ],
     "configuration": {

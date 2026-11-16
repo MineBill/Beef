@@ -9,10 +9,73 @@ import {
 
 const CLIENT_ID = 'beeflsp';
 const CLIENT_NAME = 'Beef Language Server';
+const EMIT_SCHEME = 'beef-emit';
+
+interface EmitSourceResult {
+    text: string;
+    version: number;
+}
 
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
 let statusBar: vscode.StatusBarItem | undefined;
+
+/**
+ * Serves the generated ("emitted") sources that the server only keeps in
+ * memory, so go-to-definition and the "Show generated code" lens can display
+ * them (and peek them) like ordinary documents.
+ */
+class EmitContentProvider implements vscode.TextDocumentContentProvider {
+    async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
+        if (!client) {
+            return '// The Beef language server is not running.';
+        }
+
+        const typeName = decodeURIComponent(uri.path.replace(/^\/+/, ''));
+        try {
+            const result = await client.sendRequest<EmitSourceResult | null>('beef/emitSource', { typeName });
+            if (result && typeof result.text === 'string') {
+                return result.text;
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            outputChannel?.appendLine(`Failed to load generated source for '${typeName}': ${message}`);
+        }
+
+        return '// The generated source is no longer available.';
+    }
+}
+
+function emitRange(startLine: number, endLine: number): vscode.Range {
+    const start = Math.max(0, startLine);
+    const end = Math.max(start, endLine);
+    return new vscode.Range(start, 0, end, 0);
+}
+
+/** Peeks the generated source at 'uri' instead of opening it in an editor. */
+async function showEmit(emitUri: string, startLine: number, endLine: number): Promise<void> {
+    const uri = vscode.Uri.parse(emitUri);
+    const range = emitRange(startLine, endLine);
+    const editor = vscode.window.activeTextEditor;
+
+    if (editor) {
+        try {
+            await vscode.commands.executeCommand(
+                'editor.action.peekLocations', editor.document.uri, editor.selection.active,
+                [new vscode.Location(uri, range)], 'peek');
+            return;
+        } catch {
+            // Fall through to opening beside the current editor.
+        }
+    }
+
+    const document = await vscode.workspace.openTextDocument(uri);
+    await vscode.window.showTextDocument(document, {
+        preview: true,
+        viewColumn: vscode.ViewColumn.Beside,
+        selection: range,
+    });
+}
 
 function getOutputChannel(): vscode.OutputChannel {
     outputChannel ??= vscode.window.createOutputChannel(CLIENT_NAME);
@@ -173,6 +236,8 @@ export function activate(context: vscode.ExtensionContext): void {
     statusBar.show();
 
     context.subscriptions.push(outputChannel, statusBar);
+    context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(EMIT_SCHEME, new EmitContentProvider()));
+    context.subscriptions.push(vscode.commands.registerCommand('beef.showEmit', showEmit));
     context.subscriptions.push(vscode.commands.registerCommand('beef.restartServer', restartClient));
     context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration('beef.server')) {

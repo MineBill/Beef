@@ -22,6 +22,10 @@ std::string GetExecutablePath();
 bool UriToPath(const std::string& uri, std::string& outPath);
 std::string PathToUri(const std::string& path);
 
+// Percent-encoding helpers for custom URI schemes (beef-emit:).
+std::string EncodeUriComponent(const std::string& value);
+std::string DecodeUriComponent(const std::string& value);
+
 // LSP positions use zero-based lines and UTF-16 code units for the character
 // offset. Beef sources are UTF-8, so these convert between the two.
 int OffsetFromPosition(const std::string& text, int line, int character);

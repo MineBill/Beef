@@ -287,6 +287,24 @@ Server::WorkResult Server::ExecuteWork(const WorkItem& item)
 			result.mCompileDiagnostics = mCompiler.GetCompileDiagnostics();
 		}
 		break;
+	case WorkItem::Kind::Definition:
+		{
+			std::string error;
+			result.mSuccess = mCompiler.GoToDefinition(item.mPath, item.mText, item.mCursorOffset, result.mLocations, error);
+			result.mError = error;
+			result.mCompileDiagnostics = mCompiler.GetCompileDiagnostics();
+		}
+		break;
+	case WorkItem::Kind::CodeLens:
+		result.mSuccess = mCompiler.GetEmitRegions(item.mPath, result.mEmitRegions);
+		break;
+	case WorkItem::Kind::EmitSource:
+		{
+			int version = -1;
+			result.mSuccess = mCompiler.GetEmitSource(item.mPath, result.mEmitText, version);
+			result.mEmitVersion = version;
+		}
+		break;
 	}
 
 	return result;
@@ -409,14 +427,19 @@ void Server::HandleWorkResult(WorkResult& result)
 	case WorkItem::Kind::Analyze:
 		{
 			auto itr = mPendingEdits.find(result.mPath);
-			if (itr != mPendingEdits.end())
+			if (itr == mPendingEdits.end())
+				return; // document already closed
+
+			PendingEdit& pending = itr->second;
+			pending.mAnalyzeQueued = false;
+			if (pending.mText != result.mText)
 			{
-				itr->second.mAnalyzeQueued = false;
-				if (itr->second.mText == result.mText)
-					itr->second.mAnalyzeDue = Clock::time_point::max();
-				else
-					itr->second.mAnalyzeDue = Clock::now() + std::chrono::milliseconds(ANALYZE_DEBOUNCE_MS);
+				// A newer edit arrived while this ran; the result is stale.
+				pending.mAnalyzeDue = Clock::now() + std::chrono::milliseconds(ANALYZE_DEBOUNCE_MS);
+				return;
 			}
+
+			pending.mAnalyzeDue = Clock::time_point::max();
 			mSyntaxDiagnosticsByFile[result.mPath] = std::move(result.mDiagnostics);
 			PublishPathDiagnostics(result.mPath);
 		}
@@ -425,22 +448,42 @@ void Server::HandleWorkResult(WorkResult& result)
 	case WorkItem::Kind::Refresh:
 		{
 			auto itr = mPendingEdits.find(result.mPath);
-			if (itr != mPendingEdits.end())
+			if (itr == mPendingEdits.end())
+				return;
+
+			PendingEdit& pending = itr->second;
+			pending.mRefreshQueued = false;
+			pending.mLastRefresh = Clock::now();
+			if (pending.mText != result.mText)
 			{
-				itr->second.mRefreshQueued = false;
-				itr->second.mLastRefresh = Clock::now();
-				if (itr->second.mText == result.mText)
-					itr->second.mRefreshDue = Clock::time_point::max();
-				else
-					itr->second.mRefreshDue = Clock::now() + std::chrono::milliseconds(mDiagnosticsDelayMs);
+				pending.mRefreshDue = Clock::now() + std::chrono::milliseconds(mDiagnosticsDelayMs);
+				return;
 			}
+
+			pending.mRefreshDue = Clock::time_point::max();
 			UpdateCompileDiagnostics(result.mCompileDiagnostics);
+
+			// The refreshed parse may have produced different emit regions.
+			SendRequest("workspace/codeLens/refresh", NULL);
 		}
 		return;
 
 	case WorkItem::Kind::Completion:
 		UpdateCompileDiagnostics(result.mCompileDiagnostics);
 		SendCompletionResponse(result);
+		return;
+
+	case WorkItem::Kind::Definition:
+		UpdateCompileDiagnostics(result.mCompileDiagnostics);
+		SendDefinitionResponse(result);
+		return;
+
+	case WorkItem::Kind::CodeLens:
+		SendCodeLensResponse(result);
+		return;
+
+	case WorkItem::Kind::EmitSource:
+		SendEmitSourceResponse(result);
 		return;
 	}
 }
@@ -465,6 +508,21 @@ void Server::Dispatch(Json* msg)
 		if (method == "textDocument/completion")
 		{
 			HandleCompletionRequest(params, idItem);
+			return;
+		}
+		if (method == "textDocument/definition")
+		{
+			HandleDefinitionRequest(params, idItem);
+			return;
+		}
+		if (method == "textDocument/codeLens")
+		{
+			HandleCodeLensRequest(params, idItem);
+			return;
+		}
+		if (method == "beef/emitSource")
+		{
+			HandleEmitSourceRequest(params, idItem);
 			return;
 		}
 
@@ -594,6 +652,12 @@ Json* Server::HandleInitialize(Json* params, std::string& outError)
 	Json* triggerCharacters = AddArray(completionProvider, "triggerCharacters");
 	triggerCharacters->AddItemToArray(Json::CreateString("."));
 
+	// Go-to-definition. Without this the client never sends the request.
+	capabilities->AddTrueToObject("definitionProvider");
+
+	// "Show generated code" lenses on the lines that emitted code.
+	AddObject(capabilities, "codeLensProvider");
+
 	Json* serverInfo = AddObject(result, "serverInfo");
 	serverInfo->AddStringToObject("name", "beeflsp");
 	serverInfo->AddStringToObject("version", "0.1.0");
@@ -601,21 +665,21 @@ Json* Server::HandleInitialize(Json* params, std::string& outError)
 	return result;
 }
 
-void Server::HandleCompletionRequest(Json* params, Json* idItem)
+OpenDocument* Server::GetRequestDocument(Json* params, Json* idItem, const char* requestName, int& outOffset)
 {
 	Json* textDocument = GetItem(params, "textDocument");
 	Json* position = GetItem(params, "position");
 	if ((textDocument == NULL) || (position == NULL))
 	{
-		SendErrorResponse(idItem, -32602, "Invalid completion parameters");
-		return;
+		SendErrorResponse(idItem, -32602, std::string("Invalid ") + requestName + " parameters");
+		return NULL;
 	}
 
 	std::string uri = GetString(textDocument, "uri");
 	if (uri.empty())
 	{
 		SendErrorResponse(idItem, -32602, "Missing document URI");
-		return;
+		return NULL;
 	}
 
 	Json* lineItem = position->GetObjectItem("line");
@@ -623,6 +687,115 @@ void Server::HandleCompletionRequest(Json* params, Json* idItem)
 	if ((lineItem == NULL) || (characterItem == NULL))
 	{
 		SendErrorResponse(idItem, -32602, "Invalid position");
+		return NULL;
+	}
+
+	OpenDocument* document = FindOrLoadDocument(uri);
+	if (document == NULL)
+	{
+		SendErrorResponse(idItem, -32602, "Document is not open: " + uri);
+		return NULL;
+	}
+
+	outOffset = OffsetFromPosition(document->mText, lineItem->mValueInt, characterItem->mValueInt);
+	return document;
+}
+
+void Server::HandleCompletionRequest(Json* params, Json* idItem)
+{
+	int offset = 0;
+	OpenDocument* document = GetRequestDocument(params, idItem, "completion", offset);
+	if (document == NULL)
+		return;
+
+	EnsureStartup();
+
+	WorkItem item;
+	item.mKind = WorkItem::Kind::Completion;
+	item.mPath = document->mPath;
+	item.mText = document->mText;
+	item.mCursorOffset = offset;
+	item.mRequestId = Json::Duplicate(idItem, 1);
+	item.mRequestVersion = document->mVersion;
+	EnqueueWork(std::move(item), mWorkspaceReady);
+}
+
+void Server::HandleDefinitionRequest(Json* params, Json* idItem)
+{
+	int offset = 0;
+	OpenDocument* document = GetRequestDocument(params, idItem, "definition", offset);
+	if (document == NULL)
+		return;
+
+	EnsureStartup();
+
+	WorkItem item;
+	item.mKind = WorkItem::Kind::Definition;
+	item.mPath = document->mPath;
+	item.mText = document->mText;
+	item.mCursorOffset = offset;
+	item.mRequestId = Json::Duplicate(idItem, 1);
+	item.mRequestVersion = document->mVersion;
+	EnqueueWork(std::move(item), mWorkspaceReady);
+}
+
+static std::string GetEmitTypeName(const std::string& file)
+{
+	if (file.compare(0, 6, "$Emit$") == 0)
+		return file.substr(6);
+	return file;
+}
+
+static std::string GetEmitUri(const std::string& typeName)
+{
+	return "beef-emit:/" + EncodeUriComponent(typeName);
+}
+
+void Server::SendDefinitionResponse(WorkResult& result)
+{
+	Json* id = result.mRequestId;
+	result.mRequestId = NULL;
+
+	Json* response = Json::CreateObject();
+	response->AddStringToObject("jsonrpc", "2.0");
+	response->AddItemToObject("id", (id != NULL) ? id : Json::CreateNull());
+
+	if (!result.mSuccess)
+	{
+		Json* errorObj = AddObject(response, "error");
+		errorObj->AddNumberToObject("code", -32603);
+		errorObj->AddStringToObject("message", result.mError.c_str());
+		WriteLspMessage(response);
+		return;
+	}
+
+	Json* locations = Json::CreateArray();
+	for (const auto& location : result.mLocations)
+	{
+		Json* item = Json::CreateObject();
+		// Generated code lives only inside the compiler; expose it through the
+		// beef-emit: scheme so the client can peek it.
+		std::string uri = location.mIsEmit ? GetEmitUri(GetEmitTypeName(location.mFile)) : PathToUri(location.mFile);
+		item->AddStringToObject("uri", uri.c_str());
+		Json* range = AddObject(item, "range");
+		range->AddItemToObject("start", CreatePosition(location.mLine, location.mColumn));
+		range->AddItemToObject("end", CreatePosition(location.mEndLine, location.mEndColumn));
+		locations->AddItemToArray(item);
+	}
+
+	response->AddItemToObject("result", locations);
+
+	Log("Definition for %s: %d location(s)", GetFileName(result.mPath).c_str(), (int)result.mLocations.size());
+	WriteLspMessage(response);
+}
+
+void Server::HandleCodeLensRequest(Json* params, Json* idItem)
+{
+	Json* textDocument = GetItem(params, "textDocument");
+	std::string uri = GetString(textDocument, "uri");
+	if (uri.empty())
+	{
+		SendErrorResponse(idItem, -32602, "Missing document URI");
 		return;
 	}
 
@@ -635,16 +808,92 @@ void Server::HandleCompletionRequest(Json* params, Json* idItem)
 
 	EnsureStartup();
 
-	int offset = OffsetFromPosition(document->mText, lineItem->mValueInt, characterItem->mValueInt);
-
 	WorkItem item;
-	item.mKind = WorkItem::Kind::Completion;
+	item.mKind = WorkItem::Kind::CodeLens;
 	item.mPath = document->mPath;
 	item.mText = document->mText;
-	item.mCursorOffset = offset;
 	item.mRequestId = Json::Duplicate(idItem, 1);
 	item.mRequestVersion = document->mVersion;
 	EnqueueWork(std::move(item), mWorkspaceReady);
+}
+
+void Server::SendCodeLensResponse(WorkResult& result)
+{
+	Json* id = result.mRequestId;
+	result.mRequestId = NULL;
+
+	Json* response = Json::CreateObject();
+	response->AddStringToObject("jsonrpc", "2.0");
+	response->AddItemToObject("id", (id != NULL) ? id : Json::CreateNull());
+
+	Json* lenses = Json::CreateArray();
+	for (const auto& region : result.mEmitRegions)
+	{
+		Json* lens = Json::CreateObject();
+		Json* range = AddObject(lens, "range");
+		range->AddItemToObject("start", CreatePosition(region.mLine, 0));
+		range->AddItemToObject("end", CreatePosition(region.mLine, 0));
+
+		Json* command = AddObject(lens, "command");
+		command->AddStringToObject("title", "Show generated code");
+		command->AddStringToObject("command", "beef.showEmit");
+		Json* arguments = AddArray(command, "arguments");
+		arguments->AddItemToArray(Json::CreateString(GetEmitUri(region.mTypeName).c_str()));
+		arguments->AddItemToArray(Json::CreateNumber(region.mEmitStartLine));
+		arguments->AddItemToArray(Json::CreateNumber(region.mEmitEndLine));
+
+		lenses->AddItemToArray(lens);
+	}
+
+	response->AddItemToObject("result", lenses);
+	WriteLspMessage(response);
+}
+
+void Server::HandleEmitSourceRequest(Json* params, Json* idItem)
+{
+	std::string typeName = GetString(params, "typeName");
+	if (typeName.empty())
+	{
+		static const std::string prefix = "beef-emit:/";
+		std::string uri = GetString(params, "uri");
+		if (uri.compare(0, prefix.size(), prefix) == 0)
+			typeName = DecodeUriComponent(uri.substr(prefix.size()));
+	}
+
+	if (typeName.empty())
+	{
+		SendErrorResponse(idItem, -32602, "Invalid emit source request");
+		return;
+	}
+
+	WorkItem item;
+	item.mKind = WorkItem::Kind::EmitSource;
+	item.mPath = typeName;
+	item.mRequestId = Json::Duplicate(idItem, 1);
+	EnqueueWork(std::move(item), true);
+}
+
+void Server::SendEmitSourceResponse(WorkResult& result)
+{
+	Json* id = result.mRequestId;
+	result.mRequestId = NULL;
+
+	Json* response = Json::CreateObject();
+	response->AddStringToObject("jsonrpc", "2.0");
+	response->AddItemToObject("id", (id != NULL) ? id : Json::CreateNull());
+
+	if (!result.mSuccess)
+	{
+		response->AddItemToObject("result", Json::CreateNull());
+		WriteLspMessage(response);
+		return;
+	}
+
+	Json* resultObj = Json::CreateObject();
+	resultObj->AddStringToObject("text", result.mEmitText.c_str());
+	resultObj->AddNumberToObject("version", result.mEmitVersion);
+	response->AddItemToObject("result", resultObj);
+	WriteLspMessage(response);
 }
 
 void Server::SendCompletionResponse(WorkResult& result)
@@ -1054,6 +1303,17 @@ void Server::SendNotification(const std::string& method, Json* params)
 	if (params != NULL)
 		notification->AddItemToObject("params", params);
 	WriteLspMessage(notification);
+}
+
+void Server::SendRequest(const std::string& method, Json* params)
+{
+	Json* request = Json::CreateObject();
+	request->AddStringToObject("jsonrpc", "2.0");
+	request->AddNumberToObject("id", mNextRequestId++);
+	request->AddStringToObject("method", method.c_str());
+	if (params != NULL)
+		request->AddItemToObject("params", params);
+	WriteLspMessage(request);
 }
 
 }

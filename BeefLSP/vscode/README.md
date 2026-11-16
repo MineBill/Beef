@@ -8,12 +8,16 @@ parent directory), which drives the same C++ compiler frontend as the Beef IDE.
 * `.bf` file association, syntax highlighting and comment/bracket/indent rules.
 * Completion (including member completion from `corlib` and project
   dependencies) with documentation on resolve.
+* Go to definition for types, members and locals.
 * Diagnostics for errors and warnings. Semantic errors refresh a few hundred ms
   after you stop typing (immediately on save), syntax errors sooner.
+* Generated code: a "Show generated code" code lens on the lines that comptime
+  attributes emit from, and `beef-emit:` documents for definitions that resolve
+  into generated source. Both open as read-only peeks.
 * Status bar entry and a `Beef: Restart Language Server` command.
 
-Hover, go-to-definition, references, rename, signature help and formatting are
-not implemented in the server yet.
+Hover, references, rename, signature help and formatting are not implemented in
+the server yet.
 
 ## Requirements
 

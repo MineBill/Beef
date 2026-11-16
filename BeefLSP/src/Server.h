@@ -43,14 +43,17 @@ private:
 			Startup,
 			Analyze,
 			Refresh,
-			Completion
+			Completion,
+			Definition,
+			CodeLens,
+			EmitSource
 		};
 
 		Kind mKind = Kind::Startup;
 		std::string mPath;
 		std::string mText;
 		int mCursorOffset = 0;
-		Beefy::Json* mRequestId = NULL; // owned, Completion only
+		Beefy::Json* mRequestId = NULL; // owned, Completion/Definition only
 		int mRequestVersion = 0;
 	};
 
@@ -64,6 +67,10 @@ private:
 		std::vector<Diagnostic> mDiagnostics;
 		std::vector<Diagnostic> mCompileDiagnostics;
 		std::string mCompletionInfo;
+		std::vector<DefinitionLocation> mLocations;
+		std::vector<EmitRegion> mEmitRegions;
+		std::string mEmitText;
+		int mEmitVersion = -1;
 		int mCursorOffset = 0;
 		Beefy::Json* mRequestId = NULL;
 		int mRequestVersion = 0;
@@ -97,8 +104,15 @@ private:
 	void HandleNotification(const std::string& method, Beefy::Json* params);
 
 	Beefy::Json* HandleInitialize(Beefy::Json* params, std::string& outError);
+	OpenDocument* GetRequestDocument(Beefy::Json* params, Beefy::Json* idItem, const char* requestName, int& outOffset);
 	void HandleCompletionRequest(Beefy::Json* params, Beefy::Json* idItem);
 	void SendCompletionResponse(WorkResult& result);
+	void HandleDefinitionRequest(Beefy::Json* params, Beefy::Json* idItem);
+	void SendDefinitionResponse(WorkResult& result);
+	void HandleCodeLensRequest(Beefy::Json* params, Beefy::Json* idItem);
+	void SendCodeLensResponse(WorkResult& result);
+	void HandleEmitSourceRequest(Beefy::Json* params, Beefy::Json* idItem);
+	void SendEmitSourceResponse(WorkResult& result);
 	Beefy::Json* HandleCompletionResolve(Beefy::Json* params, std::string& outError);
 
 	void HandleDidOpen(Beefy::Json* params);
@@ -113,6 +127,7 @@ private:
 	void UpdateCompileDiagnostics(const std::vector<Diagnostic>& diagnostics);
 	void PublishPathDiagnostics(const std::string& path);
 	void SendNotification(const std::string& method, Beefy::Json* params);
+	void SendRequest(const std::string& method, Beefy::Json* params);
 	void SendLogMessage(int type, const std::string& message);
 
 	OpenDocument* FindOrLoadDocument(const std::string& uri);
@@ -125,6 +140,7 @@ private:
 	bool mShutdownRequested = false;
 	bool mExitRequested = false;
 	int mDiagnosticsDelayMs = 300;
+	int mNextRequestId = 1000;
 
 	Workspace mWorkspace;
 	BeefCompilerHost mCompiler;

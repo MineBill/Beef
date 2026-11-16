@@ -135,10 +135,172 @@ static std::string GetPreprocessorMacros()
 	return macros;
 }
 
+// The compiler reports definition locations as (line, byte column). Converts
+// that to a byte offset in 'text'.
+static int ByteColumnToOffset(const std::string& text, int line, int byteColumn)
+{
+	size_t pos = 0;
+	for (int idx = 0; idx < line; idx++)
+	{
+		size_t newLine = text.find('\n', pos);
+		if (newLine == std::string::npos)
+			return (int)text.size();
+		pos = newLine + 1;
+	}
+	if (byteColumn < 0)
+		byteColumn = 0;
+	size_t offset = pos + (size_t)byteColumn;
+	if (offset > text.size())
+		offset = text.size();
+	return (int)offset;
+}
+
+// Parses the `defLoc\tfile\tline\tchar` lines produced for
+// BfResolveType_GoToDefinition.
+static void ParseDefinitionLocations(const std::string& info, const std::map<std::string, std::string>& texts,
+	Beefy::BfCompiler* compiler, std::vector<DefinitionLocation>& outLocations)
+{
+	size_t start = 0;
+	while (start < info.size())
+	{
+		size_t end = info.find('\n', start);
+		if (end == std::string::npos)
+			end = info.size();
+		std::string line = info.substr(start, end - start);
+		start = end + 1;
+
+		if (line.compare(0, 7, "defLoc\t") != 0)
+			continue;
+
+		size_t firstTab = line.find('\t', 7);
+		size_t secondTab = (firstTab == std::string::npos) ? std::string::npos : line.find('\t', firstTab + 1);
+		if (secondTab == std::string::npos)
+			continue;
+
+		DefinitionLocation location;
+		location.mFile = line.substr(7, firstTab - 7);
+		int lineNum = atoi(line.substr(firstTab + 1, secondTab - firstTab - 1).c_str());
+		int byteColumn = atoi(line.substr(secondTab + 1).c_str());
+
+		bool isEmitFile = (location.mFile.compare(0, 6, "$Emit$") == 0);
+		location.mIsEmit = isEmitFile;
+
+		std::string emitText;
+		auto textItr = texts.find(location.mFile);
+		const std::string* text = (textItr != texts.end()) ? &textItr->second : NULL;
+		if ((text == NULL) && isEmitFile && (compiler != NULL))
+		{
+			// Emitted sources only exist inside the compiler.
+			const char* source = BfCompiler_GetEmitSource(compiler, location.mFile.c_str());
+			if ((source != NULL) && (source[0] != 0))
+			{
+				emitText = source;
+				text = &emitText;
+			}
+		}
+
+		if (text != NULL)
+		{
+			int startOffset = ByteColumnToOffset(*text, lineNum, byteColumn);
+			int endOffset = startOffset + 1;
+			if (endOffset > (int)text->size())
+				endOffset = (int)text->size();
+			PositionFromOffset(*text, startOffset, location.mLine, location.mColumn);
+			PositionFromOffset(*text, endOffset, location.mEndLine, location.mEndColumn);
+		}
+		else
+		{
+			location.mLine = lineNum;
+			location.mColumn = byteColumn;
+			location.mEndLine = lineNum;
+			location.mEndColumn = byteColumn + 1;
+		}
+
+		bool duplicate = false;
+		for (const auto& existing : outLocations)
+		{
+			if ((existing.mFile == location.mFile) && (existing.mLine == location.mLine) && (existing.mColumn == location.mColumn))
+			{
+				duplicate = true;
+				break;
+			}
+		}
+		if (!duplicate)
+			outLocations.push_back(std::move(location));
+	}
+}
+
+// Parses the emit regions out of the BfCompiler_GetCollapseRegions payload:
+//   +<project:TypeName>                          registers an embed id
+//   t<id>,<charIdx>,<startLine>,<endLine>,<rev>  generated type body
+//   m...                                         generated method body
+static void ParseEmitRegions(const std::string& regions, const std::string& text, std::vector<EmitRegion>& outRegions)
+{
+	std::vector<std::string> typeNames;
+	size_t start = 0;
+	while (start < regions.size())
+	{
+		size_t end = regions.find('\n', start);
+		if (end == std::string::npos)
+			end = regions.size();
+		std::string line = regions.substr(start, end - start);
+		start = end + 1;
+
+		if (line.empty())
+			continue;
+
+		if (line[0] == '+')
+		{
+			typeNames.push_back(line.substr(1));
+			continue;
+		}
+
+		if ((line[0] != 't') && (line[0] != 'm'))
+			continue;
+
+		int embedId = 0;
+		int charIdx = 0;
+		int startLine = 0;
+		int endLine = 0;
+		int textVersion = 0;
+		if (sscanf(line.c_str() + 1, "%d,%d,%d,%d,%d", &embedId, &charIdx, &startLine, &endLine, &textVersion) != 5)
+			continue;
+		if ((embedId < 0) || (embedId >= (int)typeNames.size()))
+			continue;
+
+		EmitRegion region;
+		region.mTypeName = typeNames[embedId];
+		int column = 0;
+		if ((charIdx >= 0) && (charIdx <= (int)text.size()))
+			PositionFromOffset(text, charIdx, region.mLine, column);
+		else
+			continue;
+		region.mEmitStartLine = startLine;
+		region.mEmitEndLine = endLine;
+
+		bool duplicate = false;
+		for (const auto& existing : outRegions)
+		{
+			if ((existing.mTypeName == region.mTypeName) && (existing.mLine == region.mLine) && (existing.mEmitStartLine == region.mEmitStartLine))
+			{
+				duplicate = true;
+				break;
+			}
+		}
+		if (!duplicate)
+			outRegions.push_back(std::move(region));
+	}
+
+	// Keep the regions ordered by source line.
+	std::sort(outRegions.begin(), outRegions.end(), [](const EmitRegion& lhs, const EmitRegion& rhs)
+		{
+			return lhs.mLine < rhs.mLine;
+		});
+}
+
 BeefCompilerHost::~BeefCompilerHost()
 {
-	// The compiler holds a pointer back into the system, so it has to go first.
-	if (mCompiler != NULL)
+	// The compiler holds a pointer back into the system, so it has to go first.	if (mCompiler != NULL)
 	{
 		BfCompiler_Delete(mCompiler);
 		mCompiler = NULL;
@@ -194,6 +356,7 @@ bool BeefCompilerHost::LoadSource(BfProject* bfProject, const std::string& path,
 
 	mFileParsers[path] = parser;
 	mResolvedTexts[path] = text;
+	mEmitRegions.erase(path);
 
 	if (!worked)
 		Log("Parse/defs reported problems in %s (continuing)", path.c_str());
@@ -456,6 +619,140 @@ bool BeefCompilerHost::Autocomplete(const std::string& filePath, const std::stri
 		}
 	}
 
+	return true;
+}
+
+bool BeefCompilerHost::GoToDefinition(const std::string& filePath, const std::string& text, int cursorOffset,
+	std::vector<DefinitionLocation>& outLocations, std::string& outError)
+{
+	outLocations.clear();
+	if (!mCompiled || (mCompiler == NULL))
+	{
+		outError = "The workspace has not been resolved yet";
+		return false;
+	}
+
+	auto runPass = [&](std::vector<DefinitionLocation>& locations) -> bool
+	{
+		const ProjectInfo* projectInfo = GetProjectForFile(filePath);
+		BfProject* bfProject = NULL;
+		if (projectInfo != NULL)
+		{
+			auto itr = mBfProjects.find(projectInfo->mName);
+			if (itr != mBfProjects.end())
+				bfProject = itr->second;
+		}
+
+		BfPassInstance* passInstance = BfSystem_CreatePassInstance(mSystem);
+		BfParser* parser = BfSystem_CreateParser(mSystem, bfProject);
+
+		BfParser_SetIsClassifying(parser);
+		BfParser_SetSource(parser, text.c_str(), (int)text.size(), filePath.c_str(), -1);
+		BfParser_SetAutocomplete(parser, cursorOffset);
+
+		BfResolvePassData* resolvePassData = BfParser_CreateResolvePassData(parser, BfResolveType_GoToDefinition, false);
+
+		BfParser_Parse(parser, passInstance, false);
+		BfParser_Reduce(parser, passInstance);
+
+		BfSystem_Lock(mSystem, 0);
+		BfParser_BuildDefs(parser, passInstance, resolvePassData, false);
+		BfParser_CreateClassifier(parser, passInstance, resolvePassData, NULL);
+		bool success = BfCompiler_ClassifySource(mCompiler, passInstance, resolvePassData);
+		BfParser_FinishClassifier(parser, resolvePassData);
+		BfSystem_Unlock(mSystem);
+
+		const char* info = BfCompiler_GetAutocompleteInfo(mCompiler);
+		if (info != NULL)
+			ParseDefinitionLocations(info, mResolvedTexts, mCompiler, locations);
+
+		BfResolvePassData_Delete(resolvePassData);
+		BfPassInstance_Delete(passInstance);
+		BfSystem_DeleteParser(mSystem, parser);
+		BfSystem_RemoveOldParsers(mSystem);
+		return success;
+	};
+
+	bool success = runPass(outLocations);
+
+	// Same reasoning as completion: the document may declare types the resolved
+	// workspace does not know about yet.
+	if (outLocations.empty() && !mRefreshing)
+	{
+		auto itr = mResolvedTexts.find(filePath);
+		if ((itr == mResolvedTexts.end()) || (itr->second != text))
+		{
+			mRefreshing = true;
+			RefreshFile(filePath, text);
+			mRefreshing = false;
+			runPass(outLocations);
+		}
+	}
+
+	return success;
+}
+
+bool BeefCompilerHost::GetEmitRegions(const std::string& filePath, std::vector<EmitRegion>& outRegions)
+{
+	outRegions.clear();
+
+	auto cachedItr = mEmitRegions.find(filePath);
+	if (cachedItr != mEmitRegions.end())
+	{
+		outRegions = cachedItr->second;
+		return true;
+	}
+
+	if (!mCompiled || (mCompiler == NULL))
+		return false;
+
+	auto parserItr = mFileParsers.find(filePath);
+	if (parserItr == mFileParsers.end())
+		return false;
+
+	auto textItr = mResolvedTexts.find(filePath);
+	if (textItr == mResolvedTexts.end())
+		return false;
+
+	BfParser* parser = parserItr->second;
+	const std::string& text = textItr->second;
+
+	BfResolvePassData* resolvePassData = BfParser_CreateResolvePassData(parser, BfResolveType_Classify, false);
+	char explicitTypeNames[1] = { 0 };
+
+	BfSystem_Lock(mSystem, 0);
+	const char* regionString = BfCompiler_GetCollapseRegions(mCompiler, parser, resolvePassData, explicitTypeNames);
+	std::string regions = (regionString != NULL) ? regionString : "";
+	BfSystem_Unlock(mSystem);
+
+	BfResolvePassData_Delete(resolvePassData);
+
+	ParseEmitRegions(regions, text, outRegions);
+	mEmitRegions[filePath] = outRegions;
+	return true;
+}
+
+bool BeefCompilerHost::GetEmitSource(const std::string& typeName, std::string& outText, int& outVersion)
+{
+	outText.clear();
+	outVersion = -1;
+
+	if (!mCompiled || (mCompiler == NULL))
+		return false;
+
+	std::string fileName = "$Emit$";
+	fileName += typeName;
+
+	int version = BfCompiler_GetEmitSourceVersion(mCompiler, fileName.c_str());
+	const char* text = BfCompiler_GetEmitSource(mCompiler, fileName.c_str());
+	if ((text == NULL) || (text[0] == 0))
+	{
+		Log("No generated source for '%s' (version %d)", fileName.c_str(), version);
+		return false;
+	}
+
+	outText = text;
+	outVersion = version;
 	return true;
 }
 

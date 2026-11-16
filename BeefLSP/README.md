@@ -7,9 +7,13 @@ reimplementation: the same `BfSystem` / `BfParser` / `BfCompiler` /
 here from C++.
 
 Current feature set: **completion** (with `completionItem/resolve`
-documentation and trigger on `.`) and **diagnostics** (errors and warnings from
-the resolve pass, plus live syntax errors for the file being edited). Everything
-else is intentionally absent for now; see "Known limitations" below.
+documentation and trigger on `.`), **go-to-definition** (including locals and
+method overloads resolved through `BfResolveType_GoToDefinition`),
+**diagnostics** (errors and warnings from the resolve pass, plus live syntax
+errors for the file being edited), and **generated-code support** (definitions
+that land in comptime-emitted code point at a `beef-emit:` document, and a code
+lens on the lines that emitted code peeks it). Everything else is intentionally
+absent for now; see "Known limitations" below.
 
 ## How it works
 
@@ -33,6 +37,25 @@ initialize / didOpen / didChange          (LSP, stdio)
 `didOpen`/`didChange` additionally run a parse-only pass for the edited document
 (`BeefCompilerHost::AnalyzeFile`) so syntax errors show up while typing; the full
 resolve diagnostics replace them after the next workspace resolve.
+
+Go-to-definition reuses the same single-file pipeline with
+`BfResolveType_GoToDefinition` and reads the `defLoc` lines from the result.
+Targets inside comptime-generated code (`$Emit$<project:TypeName>`) are exposed
+through the `beef-emit:` URI scheme; the client asks for the text with the
+`beef/emitSource` request.
+
+## Generated code
+
+Comptime attributes (`[Bitfield]`, `[FlexibleArray]`, ...) can emit source for
+the type they are applied to. The server reads the same region list the IDE
+builds its "Emit" gutter buttons from (`BfCompiler_GetCollapseRegions`) and
+returns a `textDocument/codeLens` entry on every line that emitted code. The
+lens command is `beef.showEmit` with the emit type and the generated line
+range; the extension peeks the generated document there.
+
+`beef-emit:` documents are served by a `TextDocumentContentProvider` that calls
+`beef/emitSource`, so go-to-definition into generated code and the lens both
+show read-only generated source rather than a missing file.
 
 The first `initialized` (or the first completion request) triggers a one-time
 resolve-only compile of every project in the workspace, including `corlib` and
@@ -169,9 +192,9 @@ the VS Code extension). Files that are no longer mentioned are cleared.
 
 * Full document sync (`textDocumentSync.change = 1`). Fine for typical files,
   but every keystroke re-sends the document.
-* No hover, definition, references, rename, signature help, formatting or
-  semantic tokens yet. The compiler endpoints for those (`BfResolveType_*`) are
-  already reachable from `BeefCompilerHost`.
+* No hover, references, rename, signature help, formatting or semantic tokens
+  yet. The compiler endpoints for those (`BfResolveType_*`) are already
+  reachable from `BeefCompilerHost`.
 * Only the macros the IDE always defines are passed (`BF_MACHINE_X64`,
   `BF_PLATFORM_WINDOWS`/`BF_PLATFORM_LINUX`); configuration-specific defines
   (`[Configs.*]`, `DistinctOptions`, project `PreprocessorMacros`) are not.
