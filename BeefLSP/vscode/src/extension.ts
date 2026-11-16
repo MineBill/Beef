@@ -31,7 +31,7 @@ class EmitContentProvider implements vscode.TextDocumentContentProvider {
             return '// The Beef language server is not running.';
         }
 
-        const typeName = decodeURIComponent(uri.path.replace(/^\/+/, ''));
+        const typeName = emitTypeNameFromUri(uri);
         try {
             const result = await client.sendRequest<EmitSourceResult | null>('beef/emitSource', { typeName });
             if (result && typeof result.text === 'string') {
@@ -52,6 +52,36 @@ function emitRange(startLine: number, endLine: number): vscode.Range {
     return new vscode.Range(start, 0, end, 0);
 }
 
+/** "beef-emit:/<encoded type name>.bf" -> "<type name>" */
+function emitTypeNameFromUri(uri: vscode.Uri): string {
+    let path = uri.path.replace(/^\/+/, '');
+    if (path.toLowerCase().endsWith('.bf')) {
+        path = path.slice(0, -3);
+    }
+    return decodeURIComponent(path);
+}
+
+/** Shows 'locations' in VS Code's peek widget. */async function peekLocations(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    locations: vscode.Location[],
+): Promise<void> {
+    try {
+        await vscode.commands.executeCommand(
+            'editor.action.peekLocations', document.uri, position, locations, 'peek');
+        return;
+    } catch {
+        // Older clients without that command: open the first target beside.
+    }
+
+    const document_ = await vscode.workspace.openTextDocument(locations[0].uri);
+    await vscode.window.showTextDocument(document_, {
+        preview: true,
+        viewColumn: vscode.ViewColumn.Beside,
+        selection: locations[0].range,
+    });
+}
+
 /** Peeks the generated source at 'uri' instead of opening it in an editor. */
 async function showEmit(emitUri: string, startLine: number, endLine: number): Promise<void> {
     const uri = vscode.Uri.parse(emitUri);
@@ -59,14 +89,8 @@ async function showEmit(emitUri: string, startLine: number, endLine: number): Pr
     const editor = vscode.window.activeTextEditor;
 
     if (editor) {
-        try {
-            await vscode.commands.executeCommand(
-                'editor.action.peekLocations', editor.document.uri, editor.selection.active,
-                [new vscode.Location(uri, range)], 'peek');
-            return;
-        } catch {
-            // Fall through to opening beside the current editor.
-        }
+        await peekLocations(editor.document, editor.selection.active, [new vscode.Location(uri, range)]);
+        return;
     }
 
     const document = await vscode.workspace.openTextDocument(uri);

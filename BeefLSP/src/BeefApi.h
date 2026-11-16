@@ -65,6 +65,9 @@ BF_EXPORT void BF_CALLTYPE BfCompiler_ClearResults(Beefy::BfCompiler* bfCompiler
 // "$Emit$<project:TypeName>"; GetEmitSource returns the generated text.
 BF_EXPORT const char* BF_CALLTYPE BfCompiler_GetEmitSource(Beefy::BfCompiler* bfCompiler, const char* fileName);
 BF_EXPORT int BF_CALLTYPE BfCompiler_GetEmitSourceVersion(Beefy::BfCompiler* bfCompiler, const char* fileName);
+// Maps a line inside generated code back to the source that generated it.
+BF_EXPORT const char* BF_CALLTYPE BfCompiler_GetEmitLocation(Beefy::BfCompiler* bfCompiler, const char* typeName, int emitLine,
+	int& outEmbedLine, int& outEmbedLineChar, unsigned long long& outHash);
 // Collapse/fold regions for a parsed document, including the emit regions the
 // IDE turns into "Emit" buttons.
 BF_EXPORT const char* BF_CALLTYPE BfCompiler_GetCollapseRegions(Beefy::BfCompiler* bfCompiler, Beefy::BfParser* bfParser,

@@ -98,6 +98,9 @@ public:
 	// Generated source for an emit type ("<project>:<TypeName>").
 	bool GetEmitSource(const std::string& typeName, std::string& outText, int& outVersion);
 
+	// Maps a line of generated code back to the source that generated it.
+	bool GetEmitOrigin(const std::string& typeName, int emitLine, DefinitionLocation& outLocation);
+
 	// Syntax-only analysis of one document (parse + reduce, no type checking).
 	void AnalyzeFile(const std::string& filePath, const std::string& text, std::vector<Diagnostic>& outDiagnostics);
 

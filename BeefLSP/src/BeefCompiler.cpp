@@ -986,6 +986,44 @@ bool BeefCompilerHost::GetEmitSource(const std::string& typeName, std::string& o
 	return true;
 }
 
+bool BeefCompilerHost::GetEmitOrigin(const std::string& typeName, int emitLine, DefinitionLocation& outLocation)
+{
+	outLocation = DefinitionLocation();
+
+	if (!mCompiled || (mCompiler == NULL))
+		return false;
+
+	int embedLine = 0;
+	int embedLineChar = 0;
+	unsigned long long hash = 0;
+	const char* originFile = BfCompiler_GetEmitLocation(mCompiler, typeName.c_str(), emitLine, embedLine, embedLineChar, hash);
+	if ((originFile == NULL) || (originFile[0] == 0))
+		return false;
+
+	outLocation.mFile = originFile;
+
+	auto textItr = mResolvedTexts.find(outLocation.mFile);
+	if (textItr != mResolvedTexts.end())
+	{
+		const std::string& text = textItr->second;
+		int startOffset = ByteColumnToOffset(text, embedLine, embedLineChar);
+		int endOffset = startOffset + 1;
+		if (endOffset > (int)text.size())
+			endOffset = (int)text.size();
+		PositionFromOffset(text, startOffset, outLocation.mLine, outLocation.mColumn);
+		PositionFromOffset(text, endOffset, outLocation.mEndLine, outLocation.mEndColumn);
+	}
+	else
+	{
+		outLocation.mLine = embedLine;
+		outLocation.mColumn = embedLineChar;
+		outLocation.mEndLine = embedLine;
+		outLocation.mEndColumn = embedLineChar + 1;
+	}
+
+	return true;
+}
+
 void BeefCompilerHost::AnalyzeFile(const std::string& filePath, const std::string& text, std::vector<Diagnostic>& outDiagnostics)
 {
 	outDiagnostics.clear();

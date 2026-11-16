@@ -68,7 +68,10 @@ range; the extension peeks the generated document there.
 
 `beef-emit:` documents are served by a `TextDocumentContentProvider` that calls
 `beef/emitSource`, so go-to-definition into generated code and the lens both
-show read-only generated source rather than a missing file.
+show read-only generated source. The URIs end in `.bf` so the client applies the
+Beef grammar to the generated text. A definition that lands in generated code
+also reports where the code was generated from, so the client shows a peek list
+instead of navigating (hover only shows the link, as usual).
 
 The first `initialized` (or the first completion request) triggers a one-time
 resolve-only compile of every project in the workspace, including `corlib` and

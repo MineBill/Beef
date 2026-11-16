@@ -29,6 +29,8 @@ static const int ANALYZE_DEBOUNCE_MS = 150;
 static const int DEFAULT_REFRESH_DEBOUNCE_MS = 300;
 static const int MAX_REFRESH_DEBOUNCE_MS = 5000;
 
+static std::string GetEmitTypeName(const std::string& file);
+
 static Json* AddObject(Json* parent, const char* name)
 {
 	Json* obj = Json::CreateObject();
@@ -293,6 +295,34 @@ Server::WorkResult Server::ExecuteWork(const WorkItem& item)
 			result.mSuccess = mCompiler.GoToDefinition(item.mPath, item.mText, item.mCursorOffset, result.mLocations, error);
 			result.mError = error;
 			result.mCompileDiagnostics = mCompiler.GetCompileDiagnostics();
+
+			// Generated code has no editor of its own. Adding where it was
+			// generated from gives the client two targets, which it shows as a
+			// peek list instead of navigating away.
+			std::vector<DefinitionLocation> origins;
+			for (const auto& location : result.mLocations)
+			{
+				if (!location.mIsEmit)
+					continue;
+				DefinitionLocation origin;
+				if (mCompiler.GetEmitOrigin(GetEmitTypeName(location.mFile), location.mLine, origin))
+					origins.push_back(std::move(origin));
+			}
+
+			if (origins.empty() && (result.mLocations.size() == 1) && result.mLocations[0].mIsEmit)
+			{
+				// No origin available: still give the client two targets so the
+				// click peeks instead of opening a tab.
+				DefinitionLocation start = result.mLocations[0];
+				start.mLine = 0;
+				start.mColumn = 0;
+				start.mEndLine = 0;
+				start.mEndColumn = 0;
+				origins.push_back(std::move(start));
+			}
+
+			for (auto& origin : origins)
+				result.mLocations.push_back(std::move(origin));
 		}
 		break;
 	case WorkItem::Kind::CodeLens:
@@ -781,7 +811,9 @@ static std::string GetEmitTypeName(const std::string& file)
 
 static std::string GetEmitUri(const std::string& typeName)
 {
-	return "beef-emit:/" + EncodeUriComponent(typeName);
+	// The trailing ".bf" makes the client associate the virtual document with
+	// the Beef language, so the generated source gets syntax highlighting.
+	return "beef-emit:/" + EncodeUriComponent(typeName) + ".bf";
 }
 
 void Server::SendDefinitionResponse(WorkResult& result)

@@ -15,7 +15,8 @@ parent directory), which drives the same C++ compiler frontend as the Beef IDE.
   after you stop typing (immediately on save), syntax errors sooner.
 * Generated code: a "Show generated code" code lens on the lines that comptime
   attributes emit from, and `beef-emit:` documents for definitions that resolve
-  into generated source. Both open as read-only peeks.
+  into generated source. Both peek the generated code inline (with syntax
+  highlighting) instead of opening a tab.
 * Status bar entry and a `Beef: Restart Language Server` command.
 
 Hover, references, rename, signature help and formatting are not implemented in
