@@ -62,12 +62,22 @@ lenses here): methods, types, namespaces, comment blocks, `#region`s and
 
 `textDocument/semanticTokens/full` is produced from the compiler's own source
 classifier — the same `BfSourceClassifier::CharData` array the IDE fills to
-colour source. The server runs a classify pass (`BfParser_CreateClassifier` with
-the char data, then `BfCompiler_ClassifySource` and `BfParser_ClassifySource`),
-groups runs of equal element types into tokens and maps the *resolved symbol*
-types to LSP token types: namespace, type, class, struct, interface, type
-parameter, method, property, variable and parameter. Results are cached per
-document text, so repeated requests for an unchanged document are free.
+colour source. The pass re-parses the document as a **new revision of the parser
+the resolution owns** (`BfParser_SetNextRevision`, keeping it in the host's
+parser map), then runs `BfParser_BuildDefs`, `BfParser_CreateClassifier` with the
+char data, `BfCompiler_ClassifySource` and `BfParser_ClassifySource`. It groups
+runs of equal element types into tokens and maps the *resolved symbol* types to
+LSP token types: namespace, type, class, struct, interface, type parameter,
+method, property, variable and parameter. Results are cached per document text,
+so repeated requests for an unchanged document are free.
+
+That revision discipline is not optional: the def builder publishes the parser's
+type definitions into the compiler and retires the previous revision's, so the
+parser has to stay alive. Classifying a private parser and then deleting it (as
+an earlier version did) leaves the compiler holding freed ASTs, after which every
+resolve — completion, hover, go-to-definition — silently returns nothing. It went
+unnoticed until the editor peeked a corlib definition and asked for that file's
+tokens.
 
 Key words, comments, strings and numbers are lexical categories and stay with
 the TextMate grammar, which distinguishes them more precisely

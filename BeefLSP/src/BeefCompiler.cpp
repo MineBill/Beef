@@ -914,6 +914,15 @@ bool BeefCompilerHost::GetSemanticTokens(const std::string& filePath, const std:
 		return true;
 	}
 
+	// The classify pass parses the file as a new revision of the parser the
+	// resolution owns, exactly like the IDE does when it classifies a visible
+	// file. That matters for ownership: the def builder publishes this parser's
+	// type definitions into the system (and retires the previous revision's), so
+	// the parser has to outlive the pass - it becomes the file's parser here.
+	// Classifying a throwaway parser (as an earlier version did) published ASTs
+	// that were then freed with it, after which every resolve silently returned
+	// nothing - which is why go-to-definition died as soon as the editor opened
+	// a corlib file and asked for its tokens.
 	const ProjectInfo* projectInfo = GetProjectForFile(filePath);
 	BfProject* bfProject = NULL;
 	if (projectInfo != NULL)
@@ -926,6 +935,10 @@ bool BeefCompilerHost::GetSemanticTokens(const std::string& filePath, const std:
 	BfPassInstance* passInstance = BfSystem_CreatePassInstance(mSystem);
 	BfParser* parser = BfSystem_CreateParser(mSystem, bfProject);
 
+	auto parserItr = mFileParsers.find(filePath);
+	if (parserItr != mFileParsers.end())
+		BfParser_SetNextRevision(parserItr->second, parser);
+
 	BfParser_SetIsClassifying(parser);
 	BfParser_SetSource(parser, text.c_str(), (int)text.size(), filePath.c_str(), -1);
 
@@ -937,7 +950,9 @@ bool BeefCompilerHost::GetSemanticTokens(const std::string& filePath, const std:
 	BfParser_Reduce(parser, passInstance);
 
 	BfSystem_Lock(mSystem, 0);
-	BfParser_BuildDefs(parser, passInstance, resolvePassData, false);
+	// fullRefresh is what makes the def builder re-evaluate this file's types
+	// (and their attributes) instead of dropping the new defs as unchanged.
+	BfParser_BuildDefs(parser, passInstance, resolvePassData, true);
 	// The compiler-driven classify pass writes the precise element types into
 	// charData (locals, members, resolved types); ClassifySource below fills in
 	// the purely syntactic ones.
@@ -949,7 +964,12 @@ bool BeefCompilerHost::GetSemanticTokens(const std::string& filePath, const std:
 
 	BfResolvePassData_Delete(resolvePassData);
 	BfPassInstance_Delete(passInstance);
-	BfSystem_DeleteParser(mSystem, parser);
+
+	mFileParsers[filePath] = parser;
+	mResolvedTexts[filePath] = text;
+	mRegionStrings.erase(filePath);
+
+	// Reclaims the superseded revision now that the defs point at this parser.
 	BfSystem_RemoveOldParsers(mSystem);
 
 	int length = (int)charData.size();
