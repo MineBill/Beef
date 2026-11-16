@@ -7,13 +7,14 @@ reimplementation: the same `BfSystem` / `BfParser` / `BfCompiler` /
 here from C++.
 
 Current feature set: **completion** (with `completionItem/resolve`
-documentation and trigger on `.`), **go-to-definition** (including locals and
-method overloads resolved through `BfResolveType_GoToDefinition`), **hover**,
-**folding ranges**, **diagnostics** (errors and warnings from the resolve pass,
-plus live syntax errors for the file being edited), and **generated-code
-support** (definitions that land in comptime-emitted code point at a
-`beef-emit:` document, and a code lens on the lines that emitted code peeks it).
-Everything else is intentionally absent for now; see "Known limitations" below.
+documentation and trigger on `.`), **go-to-definition**
+(including locals and method overloads resolved through
+`BfResolveType_GoToDefinition`), **hover**, **folding ranges**, **semantic
+highlighting**, **diagnostics** (errors and warnings from the resolve pass, plus
+live syntax errors for the file being edited), and **generated-code support**
+(definitions that land in comptime-emitted code point at a `beef-emit:`
+document, and a code lens on the lines that emitted code peeks it). Everything
+else is intentionally absent for now; see "Known limitations" below.
 
 ## How it works
 
@@ -56,6 +57,24 @@ Folding ranges come from the collapse regions `BfCompiler_GetCollapseRegions`
 already returns (the same call that drives folding in the IDE and the emit
 lenses here): methods, types, namespaces, comment blocks, `#region`s and
 `using` runs.
+
+## Semantic highlighting
+
+`textDocument/semanticTokens/full` is produced from the compiler's own source
+classifier — the same `BfSourceClassifier::CharData` array the IDE fills to
+colour source. The server runs a classify pass (`BfParser_CreateClassifier` with
+the char data, then `BfCompiler_ClassifySource` and `BfParser_ClassifySource`),
+groups runs of equal element types into tokens and maps the *resolved symbol*
+types to LSP token types: namespace, type, class, struct, interface, type
+parameter, method, property, variable and parameter. Results are cached per
+document text, so repeated requests for an unchanged document are free.
+
+Key words, comments, strings and numbers are lexical categories and stay with
+the TextMate grammar, which distinguishes them more precisely
+(`keyword.control` vs `storage.modifier`, doc comments, verbatim strings, ...).
+Identifiers the compiler leaves unresolved are not emitted either — for example
+a type used as the target of a static call keeps the `Identifier` element type —
+so the grammar's default colour applies instead of a misleading one.
 
 ## Generated code
 
@@ -208,8 +227,8 @@ the VS Code extension). Files that are no longer mentioned are cleared.
 
 * Full document sync (`textDocumentSync.change = 1`). Fine for typical files,
   but every keystroke re-sends the document.
-* No references, rename, signature help, formatting or semantic tokens yet. The
-  compiler endpoints for those (`BfResolveType_*`) are already reachable from
+* No references, rename, signature help or formatting yet. The compiler
+  endpoints for those (`BfResolveType_*`) are already reachable from
   `BeefCompilerHost`.
 * Only the macros the IDE always defines are passed (`BF_MACHINE_X64`,
   `BF_PLATFORM_WINDOWS`/`BF_PLATFORM_LINUX`); configuration-specific defines

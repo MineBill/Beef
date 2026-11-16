@@ -357,6 +357,8 @@ bool BeefCompilerHost::LoadSource(BfProject* bfProject, const std::string& path,
 	mFileParsers[path] = parser;
 	mResolvedTexts[path] = text;
 	mRegionStrings.erase(path);
+	mSemanticTokenTexts.erase(path);
+	mSemanticTokens.erase(path);
 
 	if (!worked)
 		Log("Parse/defs reported problems in %s (continuing)", path.c_str());
@@ -845,6 +847,157 @@ bool BeefCompilerHost::Hover(const std::string& filePath, const std::string& tex
 
 	outMarkdown = markdown;
 	return !outMarkdown.empty();
+}
+
+const char* const* GetSemanticTokenTypeNames(int& outCount)
+{
+	static const char* sNames[] =
+	{
+		"namespace",
+		"type",
+		"class",
+		"struct",
+		"interface",
+		"enumMember",
+		"typeParameter",
+		"method",
+		"property",
+		"variable",
+		"parameter",
+		"keyword",
+		"comment",
+		"string",
+		"number",
+		"operator",
+	};
+	outCount = (int)(sizeof(sNames) / sizeof(sNames[0]));
+	return sNames;
+}
+
+static SemanticTokenType ToSemanticTokenType(uint8 elementType, char firstChar)
+{
+	switch (elementType)
+	{
+	case BfSourceElementType_Keyword: return SemanticTokenType::Keyword;
+	case BfSourceElementType_Comment: return SemanticTokenType::Comment;
+	case BfSourceElementType_Literal:
+		// The classifier groups strings and numbers together.
+		return ((firstChar == '"') || (firstChar == '\'') || (firstChar == '@') || (firstChar == '$'))
+			? SemanticTokenType::String : SemanticTokenType::Number;
+	case BfSourceElementType_Identifier: return SemanticTokenType::Variable;
+	case BfSourceElementType_Local: return SemanticTokenType::Variable;
+	case BfSourceElementType_Parameter: return SemanticTokenType::Parameter;
+	case BfSourceElementType_Member: return SemanticTokenType::Property;
+	case BfSourceElementType_Static: return SemanticTokenType::Variable;
+	case BfSourceElementType_Method: return SemanticTokenType::Method;
+	case BfSourceElementType_Type: return SemanticTokenType::Type;
+	case BfSourceElementType_PrimitiveType: return SemanticTokenType::Type;
+	case BfSourceElementType_Struct: return SemanticTokenType::Struct;
+	case BfSourceElementType_GenericParam: return SemanticTokenType::TypeParameter;
+	case BfSourceElementType_RefType: return SemanticTokenType::Class;
+	case BfSourceElementType_Interface: return SemanticTokenType::Interface;
+	case BfSourceElementType_Namespace: return SemanticTokenType::Namespace;
+	default: return SemanticTokenType::Variable;
+	}
+}
+
+bool BeefCompilerHost::GetSemanticTokens(const std::string& filePath, const std::string& text, std::vector<SemanticToken>& outTokens)
+{
+	outTokens.clear();
+	if (!mCompiled || (mCompiler == NULL))
+		return false;
+
+	auto cacheItr = mSemanticTokens.find(filePath);
+	if ((cacheItr != mSemanticTokens.end()) && (mSemanticTokenTexts[filePath] == text))
+	{
+		outTokens = cacheItr->second;
+		return true;
+	}
+
+	const ProjectInfo* projectInfo = GetProjectForFile(filePath);
+	BfProject* bfProject = NULL;
+	if (projectInfo != NULL)
+	{
+		auto itr = mBfProjects.find(projectInfo->mName);
+		if (itr != mBfProjects.end())
+			bfProject = itr->second;
+	}
+
+	BfPassInstance* passInstance = BfSystem_CreatePassInstance(mSystem);
+	BfParser* parser = BfSystem_CreateParser(mSystem, bfProject);
+
+	BfParser_SetIsClassifying(parser);
+	BfParser_SetSource(parser, text.c_str(), (int)text.size(), filePath.c_str(), -1);
+
+	BfResolvePassData* resolvePassData = BfParser_CreateResolvePassData(parser, BfResolveType_Classify, false);
+
+	std::vector<BfSourceClassifier::CharData> charData(text.size());
+
+	BfParser_Parse(parser, passInstance, false);
+	BfParser_Reduce(parser, passInstance);
+
+	BfSystem_Lock(mSystem, 0);
+	BfParser_BuildDefs(parser, passInstance, resolvePassData, false);
+	// The compiler-driven classify pass writes the precise element types into
+	// charData (locals, members, resolved types); ClassifySource below fills in
+	// the purely syntactic ones.
+	BfParser_CreateClassifier(parser, passInstance, resolvePassData, charData.data());
+	BfCompiler_ClassifySource(mCompiler, passInstance, resolvePassData);
+	BfParser_FinishClassifier(parser, resolvePassData);
+	BfParser_ClassifySource(parser, charData.data(), false);
+	BfSystem_Unlock(mSystem);
+
+	BfResolvePassData_Delete(resolvePassData);
+	BfPassInstance_Delete(passInstance);
+	BfSystem_DeleteParser(mSystem, parser);
+	BfSystem_RemoveOldParsers(mSystem);
+
+	int length = (int)charData.size();
+	int pos = 0;
+	while (pos < length)
+	{
+		uint8 elementType = charData[pos].mDisplayTypeId;
+		char c = text[pos];
+		// Only symbols are classified by the compiler; keywords, comments and
+		// literals are lexical categories the TextMate grammar colours more
+		// precisely (keyword.control vs storage.modifier, doc comments, verbatim
+		// strings, ...), and plain identifiers are left unresolved here.
+		if ((elementType == BfSourceElementType_Normal) || (elementType == BfSourceElementType_Identifier) ||
+			(elementType == BfSourceElementType_Keyword) || (elementType == BfSourceElementType_Comment) ||
+			(elementType == BfSourceElementType_Literal) || (c == '\n') || (c == '\r'))
+		{
+			pos++;
+			continue;
+		}
+
+		int start = pos;
+		while (pos < length)
+		{
+			char currentChar = text[pos];
+			if ((currentChar == '\n') || (currentChar == '\r'))
+				break;
+			if (charData[pos].mDisplayTypeId != elementType)
+				break;
+			pos++;
+		}
+
+		SemanticToken token;
+		int endLine = 0;
+		int endColumn = 0;
+		PositionFromOffset(text, start, token.mLine, token.mStart);
+		PositionFromOffset(text, pos, endLine, endColumn);
+		if (endLine != token.mLine)
+			continue; // should not happen, the run was split at newlines
+		token.mLength = endColumn - token.mStart;
+		if (token.mLength <= 0)
+			continue;
+		token.mType = ToSemanticTokenType(elementType, text[start]);
+		outTokens.push_back(token);
+	}
+
+	mSemanticTokenTexts[filePath] = text;
+	mSemanticTokens[filePath] = outTokens;
+	return true;
 }
 
 bool BeefCompilerHost::GetRegionString(const std::string& filePath, std::string& outRegions)

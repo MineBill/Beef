@@ -47,6 +47,7 @@ BF_EXPORT bool BF_CALLTYPE BfParser_Reduce(Beefy::BfParser* bfParser, Beefy::BfP
 BF_EXPORT bool BF_CALLTYPE BfParser_BuildDefs(Beefy::BfParser* bfParser, Beefy::BfPassInstance* bfPassInstance, Beefy::BfResolvePassData* resolvePassData, bool fullRefresh);
 BF_EXPORT void BF_CALLTYPE BfParser_CreateClassifier(Beefy::BfParser* bfParser, Beefy::BfPassInstance* bfPassInstance, Beefy::BfResolvePassData* resolvePassData, Beefy::BfSourceClassifier::CharData* charData);
 BF_EXPORT void BF_CALLTYPE BfParser_FinishClassifier(Beefy::BfParser* bfParser, Beefy::BfResolvePassData* resolvePassData);
+BF_EXPORT void BF_CALLTYPE BfParser_ClassifySource(Beefy::BfParser* bfParser, Beefy::BfSourceClassifier::CharData* charData, bool preserveFlags);
 BF_EXPORT Beefy::BfResolvePassData* BF_CALLTYPE BfParser_CreateResolvePassData(Beefy::BfParser* bfParser, Beefy::BfResolveType resolveType, bool doFuzzyAutoComplete);
 BF_EXPORT void BF_CALLTYPE BfResolvePassData_Delete(Beefy::BfResolvePassData* resolvePassData);
 

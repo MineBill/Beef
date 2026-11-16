@@ -48,7 +48,8 @@ private:
 			CodeLens,
 			EmitSource,
 			Hover,
-			FoldingRange
+			FoldingRange,
+			SemanticTokens
 		};
 
 		Kind mKind = Kind::Startup;
@@ -75,6 +76,7 @@ private:
 		int mEmitVersion = -1;
 		std::string mHoverMarkdown;
 		std::vector<FoldingRange> mFoldingRanges;
+		std::vector<SemanticToken> mSemanticTokens;
 		int mCursorOffset = 0;
 		Beefy::Json* mRequestId = NULL;
 		int mRequestVersion = 0;
@@ -121,6 +123,8 @@ private:
 	void SendHoverResponse(WorkResult& result);
 	void HandleFoldingRangeRequest(Beefy::Json* params, Beefy::Json* idItem);
 	void SendFoldingRangeResponse(WorkResult& result);
+	void HandleSemanticTokensRequest(Beefy::Json* params, Beefy::Json* idItem);
+	void SendSemanticTokensResponse(WorkResult& result);
 	Beefy::Json* HandleCompletionResolve(Beefy::Json* params, std::string& outError);
 
 	void HandleDidOpen(Beefy::Json* params);

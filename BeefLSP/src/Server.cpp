@@ -346,6 +346,10 @@ Server::WorkResult Server::ExecuteWork(const WorkItem& item)
 	case WorkItem::Kind::FoldingRange:
 		result.mSuccess = mCompiler.GetFoldingRanges(item.mPath, result.mFoldingRanges);
 		break;
+	case WorkItem::Kind::SemanticTokens:
+		result.mSuccess = mCompiler.GetSemanticTokens(item.mPath, item.mText, result.mSemanticTokens);
+		result.mCompileDiagnostics = mCompiler.GetCompileDiagnostics();
+		break;
 	}
 
 	return result;
@@ -535,6 +539,11 @@ void Server::HandleWorkResult(WorkResult& result)
 	case WorkItem::Kind::FoldingRange:
 		SendFoldingRangeResponse(result);
 		return;
+
+	case WorkItem::Kind::SemanticTokens:
+		UpdateCompileDiagnostics(result.mCompileDiagnostics);
+		SendSemanticTokensResponse(result);
+		return;
 	}
 }
 
@@ -583,6 +592,11 @@ void Server::Dispatch(Json* msg)
 		if (method == "textDocument/foldingRange")
 		{
 			HandleFoldingRangeRequest(params, idItem);
+			return;
+		}
+		if (method == "textDocument/semanticTokens/full")
+		{
+			HandleSemanticTokensRequest(params, idItem);
 			return;
 		}
 
@@ -720,6 +734,16 @@ Json* Server::HandleInitialize(Json* params, std::string& outError)
 
 	capabilities->AddTrueToObject("hoverProvider");
 	capabilities->AddTrueToObject("foldingRangeProvider");
+
+	Json* semanticTokensProvider = AddObject(capabilities, "semanticTokensProvider");
+	Json* semanticLegend = AddObject(semanticTokensProvider, "legend");
+	Json* semanticTokenTypes = AddArray(semanticLegend, "tokenTypes");
+	int semanticTypeCount = 0;
+	const char* const* semanticTypeNames = GetSemanticTokenTypeNames(semanticTypeCount);
+	for (int idx = 0; idx < semanticTypeCount; idx++)
+		semanticTokenTypes->AddItemToArray(Json::CreateString(semanticTypeNames[idx]));
+	AddArray(semanticLegend, "tokenModifiers");
+	semanticTokensProvider->AddTrueToObject("full");
 
 	Json* serverInfo = AddObject(result, "serverInfo");
 	serverInfo->AddStringToObject("name", "beeflsp");
@@ -1439,6 +1463,69 @@ void Server::SendFoldingRangeResponse(WorkResult& result)
 	}
 
 	response->AddItemToObject("result", ranges);
+	WriteLspMessage(response);
+}
+
+void Server::HandleSemanticTokensRequest(Json* params, Json* idItem)
+{
+	Json* textDocument = GetItem(params, "textDocument");
+	std::string uri = GetString(textDocument, "uri");
+	if (uri.empty())
+	{
+		SendErrorResponse(idItem, -32602, "Missing document URI");
+		return;
+	}
+
+	OpenDocument* document = FindOrLoadDocument(uri);
+	if (document == NULL)
+	{
+		SendErrorResponse(idItem, -32602, "Document is not open: " + uri);
+		return;
+	}
+
+	EnsureStartup();
+
+	WorkItem item;
+	item.mKind = WorkItem::Kind::SemanticTokens;
+	item.mPath = document->mPath;
+	item.mText = document->mText;
+	item.mRequestId = Json::Duplicate(idItem, 1);
+	item.mRequestVersion = document->mVersion;
+	EnqueueWork(std::move(item), mWorkspaceReady);
+}
+
+void Server::SendSemanticTokensResponse(WorkResult& result)
+{
+	Json* id = result.mRequestId;
+	result.mRequestId = NULL;
+
+	Json* response = Json::CreateObject();
+	response->AddStringToObject("jsonrpc", "2.0");
+	response->AddItemToObject("id", (id != NULL) ? id : Json::CreateNull());
+
+	Json* resultObj = Json::CreateObject();
+	Json* data = AddArray(resultObj, "data");
+
+	int previousLine = 0;
+	int previousStart = 0;
+	for (const auto& token : result.mSemanticTokens)
+	{
+		int deltaLine = token.mLine - previousLine;
+		int deltaStart = (deltaLine == 0) ? (token.mStart - previousStart) : token.mStart;
+		if (deltaLine < 0)
+			continue;
+
+		data->AddItemToArray(Json::CreateNumber(deltaLine));
+		data->AddItemToArray(Json::CreateNumber(deltaStart));
+		data->AddItemToArray(Json::CreateNumber(token.mLength));
+		data->AddItemToArray(Json::CreateNumber((int)token.mType));
+		data->AddItemToArray(Json::CreateNumber(0)); // modifiers
+
+		previousLine = token.mLine;
+		previousStart = token.mStart;
+	}
+
+	response->AddItemToObject("result", resultObj);
 	WriteLspMessage(response);
 }
 
