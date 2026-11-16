@@ -9,6 +9,8 @@ parent directory), which drives the same C++ compiler frontend as the Beef IDE.
 * Completion (including member completion from `corlib` and project
   dependencies) with documentation on resolve.
 * Go to definition for types, members and locals.
+* Hover with the symbol signature and its documentation.
+* Folding ranges for types, methods, comments, `#region`s and `using` blocks.
 * Diagnostics for errors and warnings. Semantic errors refresh a few hundred ms
   after you stop typing (immediately on save), syntax errors sooner.
 * Generated code: a "Show generated code" code lens on the lines that comptime

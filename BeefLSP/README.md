@@ -8,12 +8,12 @@ here from C++.
 
 Current feature set: **completion** (with `completionItem/resolve`
 documentation and trigger on `.`), **go-to-definition** (including locals and
-method overloads resolved through `BfResolveType_GoToDefinition`),
-**diagnostics** (errors and warnings from the resolve pass, plus live syntax
-errors for the file being edited), and **generated-code support** (definitions
-that land in comptime-emitted code point at a `beef-emit:` document, and a code
-lens on the lines that emitted code peeks it). Everything else is intentionally
-absent for now; see "Known limitations" below.
+method overloads resolved through `BfResolveType_GoToDefinition`), **hover**,
+**folding ranges**, **diagnostics** (errors and warnings from the resolve pass,
+plus live syntax errors for the file being edited), and **generated-code
+support** (definitions that land in comptime-emitted code point at a
+`beef-emit:` document, and a code lens on the lines that emitted code peeks it).
+Everything else is intentionally absent for now; see "Known limitations" below.
 
 ## How it works
 
@@ -43,6 +43,19 @@ Go-to-definition reuses the same single-file pipeline with
 Targets inside comptime-generated code (`$Emit$<project:TypeName>`) are exposed
 through the `beef-emit:` URI scheme; the client asks for the text with the
 `beef/emitSource` request.
+
+## Hover and folding
+
+Hover runs the same single-file resolve with `BfResolveType_GetResultString` —
+the resolve the IDE's mouseover uses. The result is `":" + signature` optionally
+followed by `"\x03" + documentation`; the server turns that into markdown (a
+`beef` fenced signature block, the type kind for plain type hovers, and the doc
+comment with its `///` prefixes and structural tags stripped).
+
+Folding ranges come from the collapse regions `BfCompiler_GetCollapseRegions`
+already returns (the same call that drives folding in the IDE and the emit
+lenses here): methods, types, namespaces, comment blocks, `#region`s and
+`using` runs.
 
 ## Generated code
 
@@ -192,9 +205,9 @@ the VS Code extension). Files that are no longer mentioned are cleared.
 
 * Full document sync (`textDocumentSync.change = 1`). Fine for typical files,
   but every keystroke re-sends the document.
-* No hover, references, rename, signature help, formatting or semantic tokens
-  yet. The compiler endpoints for those (`BfResolveType_*`) are already
-  reachable from `BeefCompilerHost`.
+* No references, rename, signature help, formatting or semantic tokens yet. The
+  compiler endpoints for those (`BfResolveType_*`) are already reachable from
+  `BeefCompilerHost`.
 * Only the macros the IDE always defines are passed (`BF_MACHINE_X64`,
   `BF_PLATFORM_WINDOWS`/`BF_PLATFORM_LINUX`); configuration-specific defines
   (`[Configs.*]`, `DistinctOptions`, project `PreprocessorMacros`) are not.

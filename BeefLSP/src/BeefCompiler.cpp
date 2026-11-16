@@ -356,7 +356,7 @@ bool BeefCompilerHost::LoadSource(BfProject* bfProject, const std::string& path,
 
 	mFileParsers[path] = parser;
 	mResolvedTexts[path] = text;
-	mEmitRegions.erase(path);
+	mRegionStrings.erase(path);
 
 	if (!worked)
 		Log("Parse/defs reported problems in %s (continuing)", path.c_str());
@@ -692,12 +692,165 @@ bool BeefCompilerHost::GoToDefinition(const std::string& filePath, const std::st
 	return success;
 }
 
-bool BeefCompilerHost::GetEmitRegions(const std::string& filePath, std::vector<EmitRegion>& outRegions)
+static std::string Trimmed(const std::string& value)
 {
-	outRegions.clear();
+	size_t start = 0;
+	size_t end = value.size();
+	while ((start < end) && isspace((unsigned char)value[start]))
+		start++;
+	while ((end > start) && isspace((unsigned char)value[end - 1]))
+		end--;
+	return value.substr(start, end - start);
+}
 
-	auto cachedItr = mEmitRegions.find(filePath);
-	if (cachedItr != mEmitRegions.end())
+// Turns a doc comment into plain markdown: drops the `///` prefixes and the
+// structural tags, keeps the prose.
+static std::string CleanDocComment(const std::string& docs)
+{
+	std::string result;
+	size_t start = 0;
+	bool pendingBlank = false;
+	while (start <= docs.size())
+	{
+		size_t end = docs.find('\n', start);
+		if (end == std::string::npos)
+			end = docs.size();
+		std::string line = docs.substr(start, end - start);
+		start = end + 1;
+
+		std::string trimmed = Trimmed(line);
+		if (trimmed.compare(0, 3, "///") == 0)
+			trimmed = Trimmed(trimmed.substr(3));
+		else if (!trimmed.empty() && (trimmed[0] == '*'))
+			trimmed = Trimmed(trimmed.substr(1));
+
+		if (trimmed.empty())
+		{
+			pendingBlank = !result.empty();
+			continue;
+		}
+
+		if ((trimmed.front() == '<') && (trimmed.back() == '>'))
+			continue;
+
+		if (!result.empty())
+			result += pendingBlank ? "\n\n" : "\n";
+		pendingBlank = false;
+		result += trimmed;
+	}
+	return result;
+}
+
+bool BeefCompilerHost::Hover(const std::string& filePath, const std::string& text, int cursorOffset, std::string& outMarkdown)
+{
+	outMarkdown.clear();
+	if (!mCompiled || (mCompiler == NULL))
+		return false;
+
+	const ProjectInfo* projectInfo = GetProjectForFile(filePath);
+	BfProject* bfProject = NULL;
+	if (projectInfo != NULL)
+	{
+		auto itr = mBfProjects.find(projectInfo->mName);
+		if (itr != mBfProjects.end())
+			bfProject = itr->second;
+	}
+
+	BfPassInstance* passInstance = BfSystem_CreatePassInstance(mSystem);
+	BfParser* parser = BfSystem_CreateParser(mSystem, bfProject);
+
+	BfParser_SetIsClassifying(parser);
+	BfParser_SetSource(parser, text.c_str(), (int)text.size(), filePath.c_str(), -1);
+	BfParser_SetAutocomplete(parser, cursorOffset);
+
+	// GetResultString is what the IDE's mouseover uses: ":" + signature,
+	// optionally followed by "\x03" + documentation.
+	BfResolvePassData* resolvePassData = BfParser_CreateResolvePassData(parser, BfResolveType_GetResultString, false);
+
+	BfParser_Parse(parser, passInstance, false);
+	BfParser_Reduce(parser, passInstance);
+
+	BfSystem_Lock(mSystem, 0);
+	BfParser_BuildDefs(parser, passInstance, resolvePassData, false);
+	BfParser_CreateClassifier(parser, passInstance, resolvePassData, NULL);
+	BfCompiler_ClassifySource(mCompiler, passInstance, resolvePassData);
+	BfParser_FinishClassifier(parser, resolvePassData);
+	BfSystem_Unlock(mSystem);
+
+	const char* info = BfCompiler_GetAutocompleteInfo(mCompiler);
+	std::string resultInfo = (info != NULL) ? info : "";
+
+	BfResolvePassData_Delete(resolvePassData);
+	BfPassInstance_Delete(passInstance);
+	BfSystem_DeleteParser(mSystem, parser);
+	BfSystem_RemoveOldParsers(mSystem);
+
+	if (resultInfo.empty())
+		return false;
+
+	size_t docsPos = resultInfo.find('\x03');
+	std::string signaturePart = (docsPos == std::string::npos) ? resultInfo : resultInfo.substr(0, docsPos);
+	std::string docsPart = (docsPos == std::string::npos) ? "" : resultInfo.substr(docsPos + 1);
+	for (char& c : docsPart)
+	{
+		if (c == '\x03')
+			c = '\n';
+	}
+
+	std::string signature;
+	std::string typeKind;
+	size_t start = 0;
+	while (start < signaturePart.size())
+	{
+		size_t end = signaturePart.find('\n', start);
+		if (end == std::string::npos)
+			end = signaturePart.size();
+		std::string line = signaturePart.substr(start, end - start);
+		start = end + 1;
+
+		if (line.empty())
+			continue;
+		if (line[0] == ':')
+			line = line.substr(1);
+		if (line.compare(0, 5, "type\t") == 0)
+		{
+			typeKind = line.substr(5);
+			continue;
+		}
+		if (!signature.empty())
+			signature += '\n';
+		signature += line;
+	}
+
+	std::string markdown;
+	if (!signature.empty())
+	{
+		markdown += "```beef\n";
+		markdown += signature;
+		markdown += "\n```";
+	}
+	if (!typeKind.empty())
+	{
+		if (!markdown.empty())
+			markdown += "\n\n";
+		markdown += "*" + typeKind + "*";
+	}
+	std::string docs = CleanDocComment(docsPart);
+	if (!docs.empty())
+	{
+		if (!markdown.empty())
+			markdown += "\n\n";
+		markdown += docs;
+	}
+
+	outMarkdown = markdown;
+	return !outMarkdown.empty();
+}
+
+bool BeefCompilerHost::GetRegionString(const std::string& filePath, std::string& outRegions)
+{
+	auto cachedItr = mRegionStrings.find(filePath);
+	if (cachedItr != mRegionStrings.end())
 	{
 		outRegions = cachedItr->second;
 		return true;
@@ -710,25 +863,102 @@ bool BeefCompilerHost::GetEmitRegions(const std::string& filePath, std::vector<E
 	if (parserItr == mFileParsers.end())
 		return false;
 
-	auto textItr = mResolvedTexts.find(filePath);
-	if (textItr == mResolvedTexts.end())
-		return false;
-
-	BfParser* parser = parserItr->second;
-	const std::string& text = textItr->second;
-
-	BfResolvePassData* resolvePassData = BfParser_CreateResolvePassData(parser, BfResolveType_Classify, false);
+	BfResolvePassData* resolvePassData = BfParser_CreateResolvePassData(parserItr->second, BfResolveType_Classify, false);
 	char explicitTypeNames[1] = { 0 };
 
 	BfSystem_Lock(mSystem, 0);
-	const char* regionString = BfCompiler_GetCollapseRegions(mCompiler, parser, resolvePassData, explicitTypeNames);
-	std::string regions = (regionString != NULL) ? regionString : "";
+	const char* regionString = BfCompiler_GetCollapseRegions(mCompiler, parserItr->second, resolvePassData, explicitTypeNames);
+	outRegions = (regionString != NULL) ? regionString : "";
 	BfSystem_Unlock(mSystem);
 
 	BfResolvePassData_Delete(resolvePassData);
 
-	ParseEmitRegions(regions, text, outRegions);
-	mEmitRegions[filePath] = outRegions;
+	mRegionStrings[filePath] = outRegions;
+	return true;
+}
+
+bool BeefCompilerHost::GetEmitRegions(const std::string& filePath, std::vector<EmitRegion>& outRegions)
+{
+	outRegions.clear();
+
+	std::string regions;
+	if (!GetRegionString(filePath, regions))
+		return false;
+
+	auto textItr = mResolvedTexts.find(filePath);
+	if (textItr == mResolvedTexts.end())
+		return false;
+
+	ParseEmitRegions(regions, textItr->second, outRegions);
+	return true;
+}
+
+bool BeefCompilerHost::GetFoldingRanges(const std::string& filePath, std::vector<FoldingRange>& outRanges)
+{
+	outRanges.clear();
+
+	std::string regions;
+	if (!GetRegionString(filePath, regions))
+		return false;
+
+	auto textItr = mResolvedTexts.find(filePath);
+	if (textItr == mResolvedTexts.end())
+		return false;
+	const std::string& text = textItr->second;
+
+	size_t start = 0;
+	while (start < regions.size())
+	{
+		size_t end = regions.find('\n', start);
+		if (end == std::string::npos)
+			end = regions.size();
+		std::string line = regions.substr(start, end - start);
+		start = end + 1;
+
+		if (line.empty())
+			continue;
+
+		char kind = line[0];
+		if ((kind == '+') || (kind == '~') || (kind == 't') || (kind == 'm'))
+			continue;
+
+		int startIdx = 0;
+		int endIdx = 0;
+		if (sscanf(line.c_str() + 1, "%d,%d", &startIdx, &endIdx) != 2)
+			continue;
+		if ((startIdx < 0) || (endIdx <= startIdx) || (endIdx > (int)text.size()))
+			continue;
+
+		FoldingRange range;
+		int column = 0;
+		PositionFromOffset(text, startIdx, range.mStartLine, column);
+		PositionFromOffset(text, endIdx, range.mEndLine, column);
+		if (range.mEndLine <= range.mStartLine)
+			continue;
+
+		switch (kind)
+		{
+		case 'C': range.mKind = "comment"; break;
+		case 'R': range.mKind = "region"; break;
+		case 'N': range.mKind = "region"; break;
+		case 'U': range.mKind = "imports"; break;
+		default: break;
+		}
+
+		outRanges.push_back(std::move(range));
+	}
+
+	std::sort(outRanges.begin(), outRanges.end(), [](const FoldingRange& lhs, const FoldingRange& rhs)
+		{
+			if (lhs.mStartLine != rhs.mStartLine)
+				return lhs.mStartLine < rhs.mStartLine;
+			return lhs.mEndLine < rhs.mEndLine;
+		});
+	outRanges.erase(std::unique(outRanges.begin(), outRanges.end(), [](const FoldingRange& lhs, const FoldingRange& rhs)
+		{
+			return (lhs.mStartLine == rhs.mStartLine) && (lhs.mEndLine == rhs.mEndLine);
+		}), outRanges.end());
+
 	return true;
 }
 

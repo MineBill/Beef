@@ -46,7 +46,9 @@ private:
 			Completion,
 			Definition,
 			CodeLens,
-			EmitSource
+			EmitSource,
+			Hover,
+			FoldingRange
 		};
 
 		Kind mKind = Kind::Startup;
@@ -71,6 +73,8 @@ private:
 		std::vector<EmitRegion> mEmitRegions;
 		std::string mEmitText;
 		int mEmitVersion = -1;
+		std::string mHoverMarkdown;
+		std::vector<FoldingRange> mFoldingRanges;
 		int mCursorOffset = 0;
 		Beefy::Json* mRequestId = NULL;
 		int mRequestVersion = 0;
@@ -113,6 +117,10 @@ private:
 	void SendCodeLensResponse(WorkResult& result);
 	void HandleEmitSourceRequest(Beefy::Json* params, Beefy::Json* idItem);
 	void SendEmitSourceResponse(WorkResult& result);
+	void HandleHoverRequest(Beefy::Json* params, Beefy::Json* idItem);
+	void SendHoverResponse(WorkResult& result);
+	void HandleFoldingRangeRequest(Beefy::Json* params, Beefy::Json* idItem);
+	void SendFoldingRangeResponse(WorkResult& result);
 	Beefy::Json* HandleCompletionResolve(Beefy::Json* params, std::string& outError);
 
 	void HandleDidOpen(Beefy::Json* params);

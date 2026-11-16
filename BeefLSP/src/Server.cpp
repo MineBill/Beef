@@ -305,6 +305,17 @@ Server::WorkResult Server::ExecuteWork(const WorkItem& item)
 			result.mEmitVersion = version;
 		}
 		break;
+	case WorkItem::Kind::Hover:
+		{
+			std::string error;
+			result.mSuccess = mCompiler.Hover(item.mPath, item.mText, item.mCursorOffset, result.mHoverMarkdown);
+			result.mError = error;
+			result.mCompileDiagnostics = mCompiler.GetCompileDiagnostics();
+		}
+		break;
+	case WorkItem::Kind::FoldingRange:
+		result.mSuccess = mCompiler.GetFoldingRanges(item.mPath, result.mFoldingRanges);
+		break;
 	}
 
 	return result;
@@ -485,6 +496,15 @@ void Server::HandleWorkResult(WorkResult& result)
 	case WorkItem::Kind::EmitSource:
 		SendEmitSourceResponse(result);
 		return;
+
+	case WorkItem::Kind::Hover:
+		UpdateCompileDiagnostics(result.mCompileDiagnostics);
+		SendHoverResponse(result);
+		return;
+
+	case WorkItem::Kind::FoldingRange:
+		SendFoldingRangeResponse(result);
+		return;
 	}
 }
 
@@ -523,6 +543,16 @@ void Server::Dispatch(Json* msg)
 		if (method == "beef/emitSource")
 		{
 			HandleEmitSourceRequest(params, idItem);
+			return;
+		}
+		if (method == "textDocument/hover")
+		{
+			HandleHoverRequest(params, idItem);
+			return;
+		}
+		if (method == "textDocument/foldingRange")
+		{
+			HandleFoldingRangeRequest(params, idItem);
 			return;
 		}
 
@@ -657,6 +687,9 @@ Json* Server::HandleInitialize(Json* params, std::string& outError)
 
 	// "Show generated code" lenses on the lines that emitted code.
 	AddObject(capabilities, "codeLensProvider");
+
+	capabilities->AddTrueToObject("hoverProvider");
+	capabilities->AddTrueToObject("foldingRangeProvider");
 
 	Json* serverInfo = AddObject(result, "serverInfo");
 	serverInfo->AddStringToObject("name", "beeflsp");
@@ -1280,6 +1313,101 @@ OpenDocument* Server::FindOrLoadDocument(const std::string& uri)
 
 	auto inserted = mDocuments.insert(std::make_pair(uri, document));
 	return &inserted.first->second;
+}
+
+void Server::HandleHoverRequest(Json* params, Json* idItem)
+{
+	int offset = 0;
+	OpenDocument* document = GetRequestDocument(params, idItem, "hover", offset);
+	if (document == NULL)
+		return;
+
+	EnsureStartup();
+
+	WorkItem item;
+	item.mKind = WorkItem::Kind::Hover;
+	item.mPath = document->mPath;
+	item.mText = document->mText;
+	item.mCursorOffset = offset;
+	item.mRequestId = Json::Duplicate(idItem, 1);
+	item.mRequestVersion = document->mVersion;
+	EnqueueWork(std::move(item), mWorkspaceReady);
+}
+
+void Server::SendHoverResponse(WorkResult& result)
+{
+	Json* id = result.mRequestId;
+	result.mRequestId = NULL;
+
+	Json* response = Json::CreateObject();
+	response->AddStringToObject("jsonrpc", "2.0");
+	response->AddItemToObject("id", (id != NULL) ? id : Json::CreateNull());
+
+	if (!result.mSuccess || result.mHoverMarkdown.empty())
+	{
+		response->AddItemToObject("result", Json::CreateNull());
+		WriteLspMessage(response);
+		return;
+	}
+
+	Json* resultObj = Json::CreateObject();
+	Json* contents = AddObject(resultObj, "contents");
+	contents->AddStringToObject("kind", "markdown");
+	contents->AddStringToObject("value", result.mHoverMarkdown.c_str());
+	response->AddItemToObject("result", resultObj);
+	WriteLspMessage(response);
+}
+
+void Server::HandleFoldingRangeRequest(Json* params, Json* idItem)
+{
+	Json* textDocument = GetItem(params, "textDocument");
+	std::string uri = GetString(textDocument, "uri");
+	if (uri.empty())
+	{
+		SendErrorResponse(idItem, -32602, "Missing document URI");
+		return;
+	}
+
+	OpenDocument* document = FindOrLoadDocument(uri);
+	if (document == NULL)
+	{
+		SendErrorResponse(idItem, -32602, "Document is not open: " + uri);
+		return;
+	}
+
+	EnsureStartup();
+
+	WorkItem item;
+	item.mKind = WorkItem::Kind::FoldingRange;
+	item.mPath = document->mPath;
+	item.mText = document->mText;
+	item.mRequestId = Json::Duplicate(idItem, 1);
+	item.mRequestVersion = document->mVersion;
+	EnqueueWork(std::move(item), mWorkspaceReady);
+}
+
+void Server::SendFoldingRangeResponse(WorkResult& result)
+{
+	Json* id = result.mRequestId;
+	result.mRequestId = NULL;
+
+	Json* response = Json::CreateObject();
+	response->AddStringToObject("jsonrpc", "2.0");
+	response->AddItemToObject("id", (id != NULL) ? id : Json::CreateNull());
+
+	Json* ranges = Json::CreateArray();
+	for (const auto& range : result.mFoldingRanges)
+	{
+		Json* item = Json::CreateObject();
+		item->AddNumberToObject("startLine", range.mStartLine);
+		item->AddNumberToObject("endLine", range.mEndLine);
+		if (!range.mKind.empty())
+			item->AddStringToObject("kind", range.mKind.c_str());
+		ranges->AddItemToArray(item);
+	}
+
+	response->AddItemToObject("result", ranges);
+	WriteLspMessage(response);
 }
 
 void Server::SendLogMessage(int type, const std::string& message)
