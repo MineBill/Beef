@@ -166,6 +166,10 @@ handy to check that the workspace resolves:
 files and ships syntax highlighting. See `vscode/README.md` for building the
 extension and locating the server binary.
 
+`vscode/schemas/` holds JSON schemas for `BeefProj.toml` and `BeefSpace.toml`
+covering every key BeefBuild reads. No editor integration uses them yet; they are
+kept for a future TOML schema feature.
+
 ## Running
 
 ```bash

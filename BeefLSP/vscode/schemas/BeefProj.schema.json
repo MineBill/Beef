@@ -1,0 +1,1036 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Beef project (BeefProj.toml)",
+  "description": "Configuration of a Beef project, as written by the Beef IDE and read by BeefBuild. Keys are case sensitive.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "FileVersion": {
+      "type": "integer",
+      "enum": [1],
+      "description": "Format version of the project file. BeefBuild writes 1."
+    },
+    "Dependencies": {
+      "$ref": "#/definitions/Dependencies",
+      "description": "Projects this project depends on, keyed by project name. corlib is an implicit dependency when this table is absent."
+    },
+    "Project": {
+      "$ref": "#/definitions/Project",
+      "description": "General project information."
+    },
+    "Platform": {
+      "$ref": "#/definitions/Platform",
+      "description": "Platform specific project settings."
+    },
+    "Configs": {
+      "type": "object",
+      "description": "Per-configuration, per-platform build options: [Configs.<Config>.<Platform>].",
+      "additionalProperties": {
+        "type": "object",
+        "description": "A configuration (Debug, Release, Paranoid, Test, ...) keyed by platform name (Win32, Win64, Linux64, wasm32, ...).",
+        "additionalProperties": {
+          "$ref": "#/definitions/ProjectOptions"
+        }
+      }
+    },
+    "ProjectFolder": {
+      "$ref": "#/definitions/Folder",
+      "description": "Source folder tree. Omit it to use the default 'src' folder with automatic inclusion."
+    }
+  },
+  "definitions": {
+    "Dependencies": {
+      "type": "object",
+      "description": "Map of dependency project name to a version requirement, a path or a git repository.",
+      "additionalProperties": {
+        "$ref": "#/definitions/Dependency"
+      }
+    },
+    "Dependency": {
+      "description": "A semver requirement string, { Path = \"...\" } or { Git = \"...\", Version = \"...\" }.",
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Semantic version requirement (for example \"*\", \"1.2.3\", \">=1.0\").",
+          "default": "*"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "Path": {
+              "type": "string",
+              "description": "Path to the project directory, relative to the directory of this file."
+            },
+            "Git": {
+              "type": "string",
+              "description": "Git repository URL to clone the dependency from."
+            },
+            "Version": {
+              "type": "string",
+              "description": "Branch, tag or commit to check out when Git is used."
+            }
+          }
+        }
+      ]
+    },
+    "Project": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "General project information.",
+      "properties": {
+        "Name": {
+          "type": "string",
+          "description": "Project name. Defaults to the name of the project directory."
+        },
+        "Version": {
+          "type": "string",
+          "description": "Project version (semver), used when other projects depend on this one."
+        },
+        "TargetType": {
+          "type": "string",
+          "default": "BeefConsoleApplication",
+          "description": "Kind of binary this project produces.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/TargetType"
+            }
+          ]
+        },
+        "StartupObject": {
+          "type": "string",
+          "description": "Type that contains the entry point, without a namespace (for example \"Program\" or \"MyApp.App\")."
+        },
+        "DefaultNamespace": {
+          "type": "string",
+          "description": "Default namespace used for files that do not declare one. Defaults to the sanitized project name."
+        },
+        "Aliases": {
+          "type": "array",
+          "description": "Aliases that identify this project when another project references it.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ProcessorMacros": {
+          "type": "array",
+          "description": "Preprocessor macros defined for the whole project.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "DistinctOptions": {
+          "type": "array",
+          "description": "Build options that only apply to types matching a filter.",
+          "items": {
+            "$ref": "#/definitions/DistinctOptions"
+          }
+        }
+      }
+    },
+    "Platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "Windows": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Windows resource and version information.",
+          "properties": {
+            "IconFile": {
+              "type": "string",
+              "description": "Path to the .ico file embedded into the executable."
+            },
+            "ManifestFile": {
+              "type": "string",
+              "description": "Path to the application manifest embedded into the executable."
+            },
+            "Description": {
+              "type": "string",
+              "description": "File description shown in the executable properties."
+            },
+            "Comments": {
+              "type": "string",
+              "description": "Additional version information comment."
+            },
+            "Company": {
+              "type": "string",
+              "description": "Company name shown in the executable properties."
+            },
+            "Product": {
+              "type": "string",
+              "description": "Product name shown in the executable properties."
+            },
+            "Copyright": {
+              "type": "string",
+              "description": "Copyright notice shown in the executable properties."
+            },
+            "FileVersion": {
+              "type": "string",
+              "description": "File version shown in the executable properties."
+            },
+            "ProductVersion": {
+              "type": "string",
+              "description": "Product version shown in the executable properties."
+            }
+          }
+        },
+        "Linux": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Linux specific project settings.",
+          "properties": {
+            "Options": {
+              "type": "string",
+              "description": "Extra linker options passed when linking the Linux target."
+            }
+          }
+        },
+        "Wasm": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "WebAssembly specific project settings.",
+          "properties": {
+            "EnableThreads": {
+              "type": "boolean",
+              "default": false,
+              "description": "Build with WebAssembly threads support."
+            }
+          }
+        }
+      }
+    },
+    "ProjectOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Build, debug and compiler options for one configuration and platform.",
+      "properties": {
+        "BuildKind": {
+          "type": "string",
+          "description": "What the build produces.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/BuildKind"
+            }
+          ]
+        },
+        "TargetDirectory": {
+          "type": "string",
+          "default": "$(BuildDir)",
+          "description": "Directory the build output is written to. Supports $(Configuration), $(Platform), $(BuildDir), $(ProjectDir), ..."
+        },
+        "TargetName": {
+          "type": "string",
+          "default": "$(ProjectName)",
+          "description": "File name of the build output, without extension. Supports the same substitutions as TargetDirectory."
+        },
+        "OtherLinkFlags": {
+          "type": "string",
+          "default": "$(LinkFlags)",
+          "description": "Extra flags passed to the linker."
+        },
+        "CLibType": {
+          "type": "string",
+          "description": "C runtime the target links against.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/CLibType"
+            }
+          ]
+        },
+        "BeefLibType": {
+          "type": "string",
+          "description": "Whether library targets are produced as static or dynamic Beef libraries.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/BeefLibType"
+            }
+          ]
+        },
+        "StackSize": {
+          "type": "integer",
+          "default": 0,
+          "description": "Stack size of the main thread in bytes. 0 uses the platform default."
+        },
+        "BuildCommandsOnCompile": {
+          "type": "string",
+          "description": "When the pre/post build and clean commands run for a compile.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/BuildCommandTrigger"
+            }
+          ]
+        },
+        "BuildCommandsOnRun": {
+          "type": "string",
+          "description": "When the pre/post build and clean commands run for a run or debug session.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/BuildCommandTrigger"
+            }
+          ]
+        },
+        "PostBuildOnFailure": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run the post build commands even when the build failed."
+        },
+        "LibPaths": {
+          "type": "array",
+          "description": "Additional library search paths.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "LinkDependencies": {
+          "type": "array",
+          "description": "Additional native libraries to link, as names passed to the linker.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "PreBuildCmds": {
+          "type": "array",
+          "description": "Commands executed before the build, in order.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "PostBuildCmds": {
+          "type": "array",
+          "description": "Commands executed after a successful build, in order.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "CleanCmds": {
+          "type": "array",
+          "description": "Commands executed when the project is cleaned.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "DebugCommand": {
+          "type": "string",
+          "default": "$(TargetPath)",
+          "description": "Program to launch for a debug session."
+        },
+        "DebugCommandArguments": {
+          "type": "string",
+          "description": "Command line arguments for the debugged program."
+        },
+        "DebugWorkingDirectory": {
+          "type": "string",
+          "default": "$(ProjectDir)",
+          "description": "Working directory of the debugged program."
+        },
+        "EnvironmentVars": {
+          "type": "array",
+          "description": "Environment variables set for the debugged program, as NAME=value.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "PreprocessorMacros": {
+          "type": "array",
+          "description": "Preprocessor macros for this configuration and platform. DEBUG, RELEASE, PARANOID and TEST are defined by default.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "RelocType": {
+          "type": "string",
+          "description": "Relocation model of the produced binary.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RelocType"
+            }
+          ]
+        },
+        "PICLevel": {
+          "type": "string",
+          "description": "Position independent code level.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/PICLevel"
+            }
+          ]
+        },
+        "OptimizationLevel": {
+          "type": "string",
+          "description": "Beef code optimization level.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/BfOptimizationLevel"
+            }
+          ]
+        },
+        "FloatingPointMode": {
+          "type": "string",
+          "description": "Floating point evaluation mode.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/FloatingPointMode"
+            }
+          ]
+        },
+        "FMASetting": {
+          "type": "string",
+          "description": "Fused multiply-add setting.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/FMASetting"
+            }
+          ]
+        },
+        "SIMDSetting": {
+          "type": "string",
+          "description": "SIMD instruction set the generated code may use.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SIMDSetting"
+            }
+          ]
+        },
+        "LTOType": {
+          "type": "string",
+          "description": "Link time optimization mode.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/LTOType"
+            }
+          ]
+        },
+        "MergeFunctions": {
+          "type": "boolean",
+          "description": "Merge identical functions during optimization."
+        },
+        "CombineLoads": {
+          "type": "boolean",
+          "description": "Combine adjacent loads."
+        },
+        "VectorizeLoops": {
+          "type": "boolean",
+          "description": "Enable loop vectorization."
+        },
+        "VectorizeSLP": {
+          "type": "boolean",
+          "description": "Enable superword level parallelism vectorization."
+        },
+        "DistinctOptions": {
+          "type": "array",
+          "description": "Build options that only apply to types matching a filter.",
+          "items": {
+            "$ref": "#/definitions/DistinctOptions"
+          }
+        },
+        "COptions": {
+          "$ref": "#/definitions/COptions",
+          "description": "Options for the C/C++ code generated by Beef."
+        }
+      }
+    },
+    "COptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Options for the C/C++ code generated by Beef. Only available when the IDE was built with C support.",
+      "properties": {
+        "CompilerType": {
+          "type": "string",
+          "default": "Clang",
+          "description": "Compiler used for the generated C/C++ code.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/CCompilerType"
+            }
+          ]
+        },
+        "OtherCFlags": {
+          "type": "string",
+          "description": "Extra flags passed when compiling generated C source."
+        },
+        "OtherCPPFlags": {
+          "type": "string",
+          "description": "Extra flags passed when compiling generated C++ source."
+        },
+        "IncludePaths": {
+          "type": "array",
+          "description": "Include paths for the generated C/C++ code.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "EnableBeefInterop": {
+          "type": "boolean",
+          "description": "Enable interop between Beef and the generated C/C++ code."
+        },
+        "PreprocessorMacros": {
+          "type": "array",
+          "description": "Preprocessor macros for the C/C++ compiler.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "DisableExceptions": {
+          "type": "boolean",
+          "description": "Compile the generated code without exceptions."
+        },
+        "SIMD": {
+          "type": "string",
+          "description": "SIMD instruction set used for the generated C/C++ code.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SIMDSetting"
+            }
+          ]
+        },
+        "GenerateLLVMAsm": {
+          "type": "boolean",
+          "description": "Also emit LLVM assembly for the generated code."
+        },
+        "NoOmitFramePointers": {
+          "type": "boolean",
+          "description": "Always keep frame pointers."
+        },
+        "DisableInlining": {
+          "type": "boolean",
+          "description": "Disable inlining in the generated code."
+        },
+        "StrictAliasing": {
+          "type": "boolean",
+          "description": "Enable strict aliasing rules."
+        },
+        "FastMath": {
+          "type": "boolean",
+          "description": "Enable fast math optimizations."
+        },
+        "DisableRTTI": {
+          "type": "boolean",
+          "description": "Compile the generated code without RTTI."
+        },
+        "OptimizationLevel": {
+          "type": "string",
+          "description": "Optimization level for the generated C/C++ code.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/COptimizationLevel"
+            }
+          ]
+        },
+        "EmitDebugInfo": {
+          "type": "boolean",
+          "description": "Emit debug information for the generated C/C++ code."
+        },
+        "AddressSanitizer": {
+          "type": "string",
+          "description": "Address sanitizer configuration passed to the C/C++ compiler."
+        },
+        "AllWarnings": {
+          "type": "boolean",
+          "description": "Enable all warnings for the generated C/C++ code."
+        },
+        "EffectiveCPPViolations": {
+          "type": "boolean",
+          "description": "Warn about effective C++ violations."
+        },
+        "Pedantic": {
+          "type": "boolean",
+          "description": "Enable pedantic warnings."
+        },
+        "WarningsAsErrors": {
+          "type": "boolean",
+          "description": "Treat warnings as errors."
+        },
+        "SpecificWarningsAsErrors": {
+          "type": "array",
+          "description": "Warnings that are treated as errors.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "DisableSpecificWarnings": {
+          "type": "array",
+          "description": "Warnings that are disabled.",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "DistinctOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Build options that only apply to types matching a filter, for example Filter = \"[System.Optimize]\".",
+      "properties": {
+        "Filter": {
+          "type": "string",
+          "description": "Type filter expression, for example \"[System.DisableChecks]\"."
+        },
+        "BfSIMDSetting": {
+          "type": "string",
+          "description": "SIMD instruction set for the matching types.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SIMDSetting"
+            }
+          ]
+        },
+        "BfOptimizationLevel": {
+          "type": "string",
+          "description": "Optimization level for the matching types.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/BfOptimizationLevel"
+            }
+          ]
+        },
+        "BfFloatingPointMode": {
+          "type": "string",
+          "description": "Floating point mode for the matching types.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/FloatingPointMode"
+            }
+          ]
+        },
+        "BfFMASetting": {
+          "type": "string",
+          "description": "FMA setting for the matching types.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/FMASetting"
+            }
+          ]
+        },
+        "EmitDebugInfo": {
+          "type": "string",
+          "description": "Debug information emitted for the matching types.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/EmitDebugInfo"
+            }
+          ]
+        },
+        "RuntimeChecks": {
+          "type": "boolean",
+          "description": "Enable runtime checks (null, bounds, ...) for the matching types."
+        },
+        "InitLocalVariables": {
+          "type": "boolean",
+          "description": "Initialize local variables to zero for the matching types."
+        },
+        "EmitDynamicCastCheck": {
+          "type": "boolean",
+          "description": "Emit dynamic cast checks for the matching types."
+        },
+        "EmitObjectAccessCheck": {
+          "type": "boolean",
+          "description": "Emit object access checks for the matching types. Requires EnableObjectDebugFlags."
+        },
+        "ArithmeticCheck": {
+          "type": "boolean",
+          "description": "Emit arithmetic overflow checks for the matching types."
+        },
+        "AllocStackTraceDepth": {
+          "type": "integer",
+          "description": "Stack trace depth recorded for allocations of the matching types."
+        },
+        "ReflectAlwaysInclude": {
+          "type": "string",
+          "description": "Reflection inclusion rule for the matching types.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/AlwaysIncludeKind"
+            }
+          ]
+        },
+        "ReflectBoxing": {
+          "type": "boolean",
+          "description": "Include boxing methods of the matching types in reflection."
+        },
+        "ReflectStaticFields": {
+          "type": "boolean",
+          "description": "Include static fields of the matching types in reflection."
+        },
+        "ReflectNonStaticFields": {
+          "type": "boolean",
+          "description": "Include instance fields of the matching types in reflection."
+        },
+        "ReflectStaticMethods": {
+          "type": "boolean",
+          "description": "Include static methods of the matching types in reflection."
+        },
+        "ReflectNonStaticMethods": {
+          "type": "boolean",
+          "description": "Include instance methods of the matching types in reflection."
+        },
+        "ReflectConstructors": {
+          "type": "boolean",
+          "description": "Include constructors of the matching types in reflection."
+        },
+        "ReflectMethodFilter": {
+          "type": "string",
+          "description": "Method name filter for reflection inclusion."
+        }
+      }
+    },
+    "Folder": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A source folder. Folders can be nested through Items.",
+      "properties": {
+        "Type": {
+          "type": "string",
+          "description": "Optional for the root folder, where it is ignored. Folders nested in Items declare their kind with Type.",
+          "enum": ["Folder", "AutoFolder", "IgnoreFolder"]
+        },
+        "Path": {
+          "type": "string",
+          "description": "Path of the folder relative to the project directory."
+        },
+        "ImportPath": {
+          "type": "string",
+          "description": "Legacy name for Path."
+        },
+        "Comment": {
+          "type": "string",
+          "description": "Comment shown in the IDE project tree."
+        },
+        "AutoInclude": {
+          "type": "boolean",
+          "description": "Automatically include every file found in this folder."
+        },
+        "Items": {
+          "type": "array",
+          "description": "Explicitly listed files and folders.",
+          "items": {
+            "$ref": "#/definitions/FolderItem"
+          }
+        },
+        "Source": {
+          "type": "array",
+          "description": "Source file names in this folder that are always included.",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "FolderItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "An explicitly listed file or folder within a source folder.",
+      "required": ["Type"],
+      "properties": {
+        "Type": {
+          "type": "string",
+          "description": "Kind of item. AutoFolder and Folder are folders, Source and IgnoreSource are files.",
+          "enum": ["Source", "IgnoreSource", "Folder", "AutoFolder", "IgnoreFolder"],
+          "x-taplo": {
+            "docs": {
+              "enumValues": [
+                "A single source file that is always compiled.",
+                "A file that is explicitly excluded from the build.",
+                "A folder whose files are listed explicitly.",
+                "A folder that is included automatically.",
+                "A folder that is excluded from the build."
+              ]
+            }
+          }
+        },
+        "Name": {
+          "type": "string",
+          "description": "File or folder name. Defaults to the file name of Path."
+        },
+        "Path": {
+          "type": "string",
+          "description": "Path relative to the project directory. Defaults to the parent folder plus Name."
+        },
+        "ImportPath": {
+          "type": "string",
+          "description": "Legacy name for Path."
+        },
+        "Comment": {
+          "type": "string",
+          "description": "Comment shown in the IDE project tree."
+        },
+        "AutoInclude": {
+          "type": "boolean",
+          "description": "For folders: automatically include every file found in them."
+        },
+        "Items": {
+          "type": "array",
+          "description": "Nested files and folders.",
+          "items": {
+            "$ref": "#/definitions/FolderItem"
+          }
+        },
+        "Source": {
+          "type": "array",
+          "description": "Source file names in this folder that are always included.",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "TargetType": {
+      "type": "string",
+      "enum": [
+        "BeefConsoleApplication",
+        "BeefGUIApplication",
+        "BeefLib",
+        "CustomBuild",
+        "BeefTest",
+        "C_ConsoleApplication",
+        "C_GUIApplication",
+        "BeefApplication_StaticLib",
+        "BeefApplication_DynamicLib",
+        "BeefLib_Static",
+        "BeefLib_Dynamic",
+        "BeefWindowsApplication",
+        "C_WindowsApplication",
+        "BeefDynLib"
+      ],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "A Beef executable that uses the console.",
+            "A Beef executable that uses the GUI subsystem.",
+            "A Beef library, linked at runtime.",
+            "Only run the build commands, do not compile anything.",
+            "A Beef test executable.",
+            "A C executable that uses the console.",
+            "A C executable that uses the GUI subsystem.",
+            "A Beef application whose code is placed in a static library.",
+            "A Beef application whose code is placed in a dynamic library.",
+            "A Beef library produced as a static library.",
+            "A Beef library produced as a dynamic library.",
+            "Legacy alias for BeefGUIApplication.",
+            "Legacy alias for C_GUIApplication.",
+            "Legacy alias for BeefLib (dynamic)."
+          ]
+        }
+      }
+    },
+    "BuildKind": {
+      "type": "string",
+      "enum": ["Normal", "Test", "StaticLib", "DynamicLib", "Intermediate", "NotSupported"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "A normal executable.",
+            "A test executable.",
+            "A static library.",
+            "A dynamic library.",
+            "An intermediate library used for incremental builds.",
+            "Building this configuration is not supported."
+          ]
+        }
+      }
+    },
+    "CLibType": {
+      "type": "string",
+      "enum": ["None", "Dynamic", "Static", "DynamicDebug", "StaticDebug", "SystemMSVCRT"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Do not link a C runtime.",
+            "Link the dynamic C runtime.",
+            "Link the static C runtime.",
+            "Link the debug dynamic C runtime.",
+            "Link the debug static C runtime.",
+            "Link the operating system C runtime (Windows only)."
+          ]
+        }
+      }
+    },
+    "BeefLibType": {
+      "type": "string",
+      "enum": ["Dynamic", "DynamicDebug", "Static"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Produce a dynamic Beef library.",
+            "Produce a dynamic Beef library with debug information.",
+            "Produce a static Beef library."
+          ]
+        }
+      }
+    },
+    "BuildCommandTrigger": {
+      "type": "string",
+      "enum": ["Never", "IfFilesChanged", "Always"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Never run the commands.",
+            "Run the commands only when source files changed.",
+            "Always run the commands."
+          ]
+        }
+      }
+    },
+    "RelocType": {
+      "type": "string",
+      "enum": ["NotSet", "Static", "PIC", "DynamicNoPIC", "ROPI", "RWPI", "ROPI_RWPI"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Let the platform decide.",
+            "Non-relocatable code at a fixed address.",
+            "Position independent code.",
+            "Relocatable code without position independence.",
+            "Read-only position independence.",
+            "Read-write position independence.",
+            "Read-only and read-write position independence."
+          ]
+        }
+      }
+    },
+    "PICLevel": {
+      "type": "string",
+      "enum": ["NotSet", "Not", "Small", "Big"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Let the platform decide.",
+            "Position independent code is not used.",
+            "Small position independent code model.",
+            "Large position independent code model."
+          ]
+        }
+      }
+    },
+    "BfOptimizationLevel": {
+      "type": "string",
+      "enum": ["O0", "O1", "O2", "O3", "Og", "OgPlus"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Disable optimizations.",
+            "Basic optimizations.",
+            "Standard optimizations.",
+            "Aggressive optimizations.",
+            "Optimize without hurting debuggability.",
+            "Optimize like Og, plus inlining within a method."
+          ]
+        }
+      }
+    },
+    "FloatingPointMode": {
+      "type": "string",
+      "enum": ["Precise", "AllowFMA", "Fast"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "IEEE-precise floating point.",
+            "Fuse a*b+c only within a single expression.",
+            "Fast, less precise floating point."
+          ]
+        }
+      }
+    },
+    "FMASetting": {
+      "type": "string",
+      "enum": ["TargetDefault", "Enabled", "Disabled"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Use the default of the target.",
+            "Enable fused multiply-add.",
+            "Disable fused multiply-add."
+          ]
+        }
+      }
+    },
+    "SIMDSetting": {
+      "type": "string",
+      "enum": ["None", "MMX", "SSE", "SSE2", "SSE3", "SSE4", "SSE41", "SSE42", "AVX", "AVX2", "AVX512"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "No SIMD instructions.",
+            "MMX instructions.",
+            "SSE instructions.",
+            "SSE2 instructions.",
+            "SSE3 instructions.",
+            "SSE4 instructions.",
+            "SSE4.1 instructions.",
+            "SSE4.2 instructions.",
+            "AVX instructions.",
+            "AVX2 instructions.",
+            "AVX-512 instructions."
+          ]
+        }
+      }
+    },
+    "LTOType": {
+      "type": "string",
+      "enum": ["None", "Thin"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "No link time optimization.",
+            "Thin link time optimization."
+          ]
+        }
+      }
+    },
+    "CCompilerType": {
+      "type": "string",
+      "enum": ["Clang", "GCC"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": ["Use clang.", "Use gcc."]
+        }
+      }
+    },
+    "COptimizationLevel": {
+      "type": "string",
+      "enum": ["O0", "O1", "O2", "O3", "Ofast", "Og", "FromWorkspace"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Disable optimizations.",
+            "Basic optimizations.",
+            "Standard optimizations.",
+            "Aggressive optimizations.",
+            "Aggressive optimizations, ignoring strict standards compliance.",
+            "Optimize without hurting debuggability.",
+            "Use the optimization level chosen in the workspace configuration."
+          ]
+        }
+      }
+    },
+    "EmitDebugInfo": {
+      "type": "string",
+      "enum": ["No", "Yes", "LinesOnly"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Do not emit debug information.",
+            "Emit full debug information.",
+            "Emit only line information."
+          ]
+        }
+      }
+    },
+    "AlwaysIncludeKind": {
+      "type": "string",
+      "enum": ["NotSet", "No", "IncludeType", "AssumeInstantiated", "IncludeAll", "IncludeFiltered"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Use the default.",
+            "Never include automatically.",
+            "Include the type itself.",
+            "Assume the type is instantiated elsewhere.",
+            "Include all matching types.",
+            "Include types matching ReflectMethodFilter."
+          ]
+        }
+      }
+    }
+  }
+}

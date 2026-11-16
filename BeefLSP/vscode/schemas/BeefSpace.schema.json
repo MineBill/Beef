@@ -1,0 +1,713 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Beef workspace (BeefSpace.toml)",
+  "description": "Configuration of a Beef workspace, as written by the Beef IDE and read by BeefBuild. Keys are case sensitive.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "FileVersion": {
+      "type": "integer",
+      "enum": [1],
+      "description": "Format version of the workspace file. BeefBuild writes 1."
+    },
+    "Extensions": {
+      "type": "array",
+      "description": "Workspace extensions the IDE has to load to open this workspace.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "Projects": {
+      "type": "object",
+      "description": "Projects that make up the workspace, keyed by project name.",
+      "additionalProperties": {
+        "$ref": "#/definitions/Dependency"
+      }
+    },
+    "Locked": {
+      "type": "array",
+      "description": "Projects that cannot be removed from the workspace.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "Unlocked": {
+      "type": "array",
+      "description": "Projects that can be removed from the workspace even though they are locked by default.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "WorkspaceFolders": {
+      "type": "object",
+      "description": "Folders shown in the IDE project tree. Keys are folder paths, values are the projects placed in them.",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "ExtraConfigs": {
+      "type": "array",
+      "description": "Additional configuration names that are not written under Configs.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "ExtraPlatforms": {
+      "type": "array",
+      "description": "Additional platform names that are not one of the built-in Win32, Win64 and Linux64 platforms.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "Workspace": {
+      "$ref": "#/definitions/Workspace",
+      "description": "Workspace wide settings."
+    },
+    "Configs": {
+      "type": "object",
+      "description": "Per-configuration, per-platform workspace options: [Configs.<Config>.<Platform>].",
+      "additionalProperties": {
+        "type": "object",
+        "description": "A configuration (Debug, Release, Paranoid, Test, ...) keyed by platform name (Win32, Win64, Linux64, ...).",
+        "additionalProperties": {
+          "$ref": "#/definitions/WorkspaceOptions"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "Dependency": {
+      "description": "A semver requirement string, { Path = \"...\" } or { Git = \"...\", Version = \"...\" }.",
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Semantic version requirement (for example \"*\", \"1.2.3\", \">=1.0\").",
+          "default": "*"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "Path": {
+              "type": "string",
+              "description": "Path to the project directory, relative to the directory of this file."
+            },
+            "Git": {
+              "type": "string",
+              "description": "Git repository URL to clone the project from."
+            },
+            "Version": {
+              "type": "string",
+              "description": "Branch, tag or commit to check out when Git is used."
+            }
+          }
+        }
+      ]
+    },
+    "Workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Workspace wide settings.",
+      "properties": {
+        "StartupProject": {
+          "type": "string",
+          "description": "Project that is built and run by default."
+        },
+        "PreprocessorMacros": {
+          "type": "array",
+          "description": "Preprocessor macros defined for every project in the workspace.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "DistinctOptions": {
+          "type": "array",
+          "description": "Build options that only apply to types matching a filter.",
+          "items": {
+            "$ref": "#/definitions/DistinctOptions"
+          }
+        }
+      }
+    },
+    "WorkspaceOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Compiler and runtime options for one configuration and platform, shared by all projects in the workspace.",
+      "properties": {
+        "PreprocessorMacros": {
+          "type": "array",
+          "description": "Preprocessor macros for this configuration and platform.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "Toolset": {
+          "type": "string",
+          "description": "Toolset used to link the target.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ToolsetType"
+            }
+          ]
+        },
+        "BuildKind": {
+          "type": "string",
+          "description": "What the build produces.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/BuildKind"
+            }
+          ]
+        },
+        "TargetTriple": {
+          "type": "string",
+          "description": "LLVM target triple override, for example \"x86_64-pc-windows-msvc\"."
+        },
+        "TargetCPU": {
+          "type": "string",
+          "description": "LLVM target CPU override, for example \"generic\" or \"znver3\"."
+        },
+        "BfSIMDSetting": {
+          "type": "string",
+          "description": "SIMD instruction set the generated code may use.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SIMDSetting"
+            }
+          ]
+        },
+        "BfFloatingPointMode": {
+          "type": "string",
+          "description": "Floating point evaluation mode.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/FloatingPointMode"
+            }
+          ]
+        },
+        "BfFMASetting": {
+          "type": "string",
+          "description": "Fused multiply-add setting.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/FMASetting"
+            }
+          ]
+        },
+        "BfOptimizationLevel": {
+          "type": "string",
+          "description": "Beef code optimization level.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/BfOptimizationLevel"
+            }
+          ]
+        },
+        "LTOType": {
+          "type": "string",
+          "description": "Link time optimization mode.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/LTOType"
+            }
+          ]
+        },
+        "AllocType": {
+          "type": "string",
+          "description": "Allocator linked into the target.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/AllocType"
+            }
+          ]
+        },
+        "AllocMalloc": {
+          "type": "string",
+          "description": "Symbol used as malloc when AllocType is Custom."
+        },
+        "AllocFree": {
+          "type": "string",
+          "description": "Symbol used as free when AllocType is Custom."
+        },
+        "EmitDebugInfo": {
+          "type": "string",
+          "description": "Debug information emitted for the target.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/EmitDebugInfo"
+            }
+          ]
+        },
+        "NoOmitFramePointers": {
+          "type": "boolean",
+          "description": "Always keep frame pointers."
+        },
+        "LargeStrings": {
+          "type": "boolean",
+          "description": "Use 64-bit lengths in the string implementation."
+        },
+        "LargeCollections": {
+          "type": "boolean",
+          "description": "Use 64-bit lengths in collection implementations."
+        },
+        "RuntimeKind": {
+          "type": "string",
+          "description": "Amount of Beef runtime services linked into the target.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RuntimeKind"
+            }
+          ]
+        },
+        "ReflectKind": {
+          "type": "string",
+          "description": "Amount of reflection information emitted for the target.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ReflectKind"
+            }
+          ]
+        },
+        "InitLocalVariables": {
+          "type": "boolean",
+          "default": false,
+          "description": "Initialize local variables to zero."
+        },
+        "RuntimeChecks": {
+          "type": "boolean",
+          "description": "Enable runtime checks (null, bounds, ...)."
+        },
+        "EmitDynamicCastCheck": {
+          "type": "boolean",
+          "description": "Emit dynamic cast checks."
+        },
+        "EnableObjectDebugFlags": {
+          "type": "boolean",
+          "description": "Store debug flags in object headers."
+        },
+        "EmitObjectAccessCheck": {
+          "type": "boolean",
+          "description": "Emit object access checks. Requires EnableObjectDebugFlags."
+        },
+        "ArithmeticCheck": {
+          "type": "boolean",
+          "description": "Emit arithmetic overflow checks."
+        },
+        "ArrayBoundsCheck": {
+          "type": "boolean",
+          "description": "Legacy option, superseded by RuntimeChecks. BeefBuild ignores it."
+        },
+        "EnableCustodian": {
+          "type": "boolean",
+          "description": "Legacy option. BeefBuild ignores it."
+        },
+        "EnableRealtimeLeakCheck": {
+          "type": "boolean",
+          "description": "Check for leaks while the program runs (Windows only)."
+        },
+        "EnableSideStack": {
+          "type": "boolean",
+          "description": "Use the separate side stack for runtime checking (Windows only)."
+        },
+        "AllowHotSwapping": {
+          "type": "boolean",
+          "description": "Allow hot swapping code while the program runs (Windows only)."
+        },
+        "AllocStackTraceDepth": {
+          "type": "integer",
+          "default": 1,
+          "description": "Stack trace depth recorded for allocations."
+        },
+        "IncrementalBuild": {
+          "type": "boolean",
+          "description": "Reuse the previous build's object files."
+        },
+        "IntermediateType": {
+          "type": "string",
+          "description": "Intermediate files kept between builds.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/IntermediateType"
+            }
+          ]
+        },
+        "CSIMDSetting": {
+          "type": "string",
+          "description": "SIMD instruction set used for C/C++ code.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SIMDSetting"
+            }
+          ]
+        },
+        "COptimizationLevel": {
+          "type": "string",
+          "description": "Optimization level for C/C++ code.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/COptimizationLevel"
+            }
+          ]
+        },
+        "ConfigSelections": {
+          "type": "object",
+          "description": "Per-project configuration and platform overrides for this configuration and platform.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "Enabled": {
+                "type": "boolean",
+                "default": true,
+                "description": "Whether the project is built."
+              },
+              "Config": {
+                "type": "string",
+                "description": "Configuration the project is built with. Defaults to this configuration."
+              },
+              "Platform": {
+                "type": "string",
+                "description": "Platform the project is built for. Defaults to this platform."
+              }
+            }
+          }
+        },
+        "DistinctOptions": {
+          "type": "array",
+          "description": "Build options that only apply to types matching a filter.",
+          "items": {
+            "$ref": "#/definitions/DistinctOptions"
+          }
+        }
+      }
+    },
+    "DistinctOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Build options that only apply to types matching a filter, for example Filter = \"[System.Optimize]\".",
+      "properties": {
+        "Filter": {
+          "type": "string",
+          "description": "Type filter expression, for example \"[System.DisableChecks]\"."
+        },
+        "BfSIMDSetting": {
+          "type": "string",
+          "description": "SIMD instruction set for the matching types.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SIMDSetting"
+            }
+          ]
+        },
+        "BfOptimizationLevel": {
+          "type": "string",
+          "description": "Optimization level for the matching types.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/BfOptimizationLevel"
+            }
+          ]
+        },
+        "BfFloatingPointMode": {
+          "type": "string",
+          "description": "Floating point mode for the matching types.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/FloatingPointMode"
+            }
+          ]
+        },
+        "BfFMASetting": {
+          "type": "string",
+          "description": "FMA setting for the matching types.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/FMASetting"
+            }
+          ]
+        },
+        "EmitDebugInfo": {
+          "type": "string",
+          "description": "Debug information emitted for the matching types.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/EmitDebugInfo"
+            }
+          ]
+        },
+        "RuntimeChecks": {
+          "type": "boolean",
+          "description": "Enable runtime checks (null, bounds, ...) for the matching types."
+        },
+        "InitLocalVariables": {
+          "type": "boolean",
+          "description": "Initialize local variables to zero for the matching types."
+        },
+        "EmitDynamicCastCheck": {
+          "type": "boolean",
+          "description": "Emit dynamic cast checks for the matching types."
+        },
+        "EmitObjectAccessCheck": {
+          "type": "boolean",
+          "description": "Emit object access checks for the matching types. Requires EnableObjectDebugFlags."
+        },
+        "ArithmeticCheck": {
+          "type": "boolean",
+          "description": "Emit arithmetic overflow checks for the matching types."
+        },
+        "AllocStackTraceDepth": {
+          "type": "integer",
+          "description": "Stack trace depth recorded for allocations of the matching types."
+        },
+        "ReflectAlwaysInclude": {
+          "type": "string",
+          "description": "Reflection inclusion rule for the matching types.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/AlwaysIncludeKind"
+            }
+          ]
+        },
+        "ReflectBoxing": {
+          "type": "boolean",
+          "description": "Include boxing methods of the matching types in reflection."
+        },
+        "ReflectStaticFields": {
+          "type": "boolean",
+          "description": "Include static fields of the matching types in reflection."
+        },
+        "ReflectNonStaticFields": {
+          "type": "boolean",
+          "description": "Include instance fields of the matching types in reflection."
+        },
+        "ReflectStaticMethods": {
+          "type": "boolean",
+          "description": "Include static methods of the matching types in reflection."
+        },
+        "ReflectNonStaticMethods": {
+          "type": "boolean",
+          "description": "Include instance methods of the matching types in reflection."
+        },
+        "ReflectConstructors": {
+          "type": "boolean",
+          "description": "Include constructors of the matching types in reflection."
+        },
+        "ReflectMethodFilter": {
+          "type": "string",
+          "description": "Method name filter for reflection inclusion."
+        }
+      }
+    },
+    "ToolsetType": {
+      "type": "string",
+      "enum": ["GNU", "Microsoft", "LLVM"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Use the GNU linker.",
+            "Use the Microsoft linker.",
+            "Use the LLVM linker (lld)."
+          ]
+        }
+      }
+    },
+    "BuildKind": {
+      "type": "string",
+      "enum": ["Normal", "Test", "StaticLib", "DynamicLib", "Intermediate", "NotSupported"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "A normal executable.",
+            "A test executable.",
+            "A static library.",
+            "A dynamic library.",
+            "An intermediate library used for incremental builds.",
+            "Building this configuration is not supported."
+          ]
+        }
+      }
+    },
+    "BfOptimizationLevel": {
+      "type": "string",
+      "enum": ["O0", "O1", "O2", "O3", "Og", "OgPlus"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Disable optimizations.",
+            "Basic optimizations.",
+            "Standard optimizations.",
+            "Aggressive optimizations.",
+            "Optimize without hurting debuggability.",
+            "Optimize like Og, plus inlining within a method."
+          ]
+        }
+      }
+    },
+    "FloatingPointMode": {
+      "type": "string",
+      "enum": ["Precise", "AllowFMA", "Fast"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "IEEE-precise floating point.",
+            "Fuse a*b+c only within a single expression.",
+            "Fast, less precise floating point."
+          ]
+        }
+      }
+    },
+    "FMASetting": {
+      "type": "string",
+      "enum": ["TargetDefault", "Enabled", "Disabled"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Use the default of the target.",
+            "Enable fused multiply-add.",
+            "Disable fused multiply-add."
+          ]
+        }
+      }
+    },
+    "SIMDSetting": {
+      "type": "string",
+      "enum": ["None", "MMX", "SSE", "SSE2", "SSE3", "SSE4", "SSE41", "SSE42", "AVX", "AVX2", "AVX512"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "No SIMD instructions.",
+            "MMX instructions.",
+            "SSE instructions.",
+            "SSE2 instructions.",
+            "SSE3 instructions.",
+            "SSE4 instructions.",
+            "SSE4.1 instructions.",
+            "SSE4.2 instructions.",
+            "AVX instructions.",
+            "AVX2 instructions.",
+            "AVX-512 instructions."
+          ]
+        }
+      }
+    },
+    "LTOType": {
+      "type": "string",
+      "enum": ["None", "Thin"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "No link time optimization.",
+            "Thin link time optimization."
+          ]
+        }
+      }
+    },
+    "AllocType": {
+      "type": "string",
+      "enum": ["CRT", "Debug", "Stomp", "JEMalloc", "JEMalloc_Debug", "TCMalloc", "TCMalloc_Debug", "Custom"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Use the C runtime allocator.",
+            "Use the debug allocator that tracks allocations.",
+            "Use the Stomp allocator.",
+            "Use jemalloc.",
+            "Use jemalloc with debug checks.",
+            "Use tcmalloc.",
+            "Use tcmalloc with debug checks.",
+            "Use the functions named by AllocMalloc and AllocFree."
+          ]
+        }
+      }
+    },
+    "RuntimeKind": {
+      "type": "string",
+      "enum": ["Default", "Reduced", "Disabled"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Link the full Beef runtime.",
+            "Link a reduced runtime.",
+            "Do not link the Beef runtime."
+          ]
+        }
+      }
+    },
+    "ReflectKind": {
+      "type": "string",
+      "enum": ["Normal", "Minimal"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Emit full reflection information.",
+            "Emit minimal reflection information."
+          ]
+        }
+      }
+    },
+    "IntermediateType": {
+      "type": "string",
+      "enum": ["Object", "IRCode", "ObjectAndIRCode", "Bitcode", "BitcodeAndIRCode"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Keep object files.",
+            "Keep LLVM IR files.",
+            "Keep object and LLVM IR files.",
+            "Keep LLVM bitcode files.",
+            "Keep LLVM bitcode and IR files."
+          ]
+        }
+      }
+    },
+    "EmitDebugInfo": {
+      "type": "string",
+      "enum": ["No", "Yes", "LinesOnly"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Do not emit debug information.",
+            "Emit full debug information.",
+            "Emit only line information."
+          ]
+        }
+      }
+    },
+    "COptimizationLevel": {
+      "type": "string",
+      "enum": ["O0", "O1", "O2", "O3", "Ofast", "Og", "FromWorkspace"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Disable optimizations.",
+            "Basic optimizations.",
+            "Standard optimizations.",
+            "Aggressive optimizations.",
+            "Aggressive optimizations, ignoring strict standards compliance.",
+            "Optimize without hurting debuggability.",
+            "Use the optimization level chosen in the workspace configuration."
+          ]
+        }
+      }
+    },
+    "AlwaysIncludeKind": {
+      "type": "string",
+      "enum": ["NotSet", "No", "IncludeType", "AssumeInstantiated", "IncludeAll", "IncludeFiltered"],
+      "x-taplo": {
+        "docs": {
+          "enumValues": [
+            "Use the default.",
+            "Never include automatically.",
+            "Include the type itself.",
+            "Assume the type is instantiated elsewhere.",
+            "Include all matching types.",
+            "Include types matching ReflectMethodFilter."
+          ]
+        }
+      }
+    }
+  }
+}
