@@ -346,6 +346,10 @@ Server::WorkResult Server::ExecuteWork(const WorkItem& item)
 	case WorkItem::Kind::FoldingRange:
 		result.mSuccess = mCompiler.GetFoldingRanges(item.mPath, result.mFoldingRanges);
 		break;
+	case WorkItem::Kind::SignatureHelp:
+		result.mSuccess = mCompiler.GetInvokeInfo(item.mPath, item.mText, item.mCursorOffset, result.mSignatureInfo);
+		result.mCompileDiagnostics = mCompiler.GetCompileDiagnostics();
+		break;
 	case WorkItem::Kind::SemanticTokens:
 		result.mSuccess = mCompiler.GetSemanticTokens(item.mPath, item.mText, result.mSemanticTokens);
 		result.mCompileDiagnostics = mCompiler.GetCompileDiagnostics();
@@ -540,6 +544,11 @@ void Server::HandleWorkResult(WorkResult& result)
 		SendFoldingRangeResponse(result);
 		return;
 
+	case WorkItem::Kind::SignatureHelp:
+		UpdateCompileDiagnostics(result.mCompileDiagnostics);
+		SendSignatureHelpResponse(result);
+		return;
+
 	case WorkItem::Kind::SemanticTokens:
 		UpdateCompileDiagnostics(result.mCompileDiagnostics);
 		SendSemanticTokensResponse(result);
@@ -592,6 +601,11 @@ void Server::Dispatch(Json* msg)
 		if (method == "textDocument/foldingRange")
 		{
 			HandleFoldingRangeRequest(params, idItem);
+			return;
+		}
+		if (method == "textDocument/signatureHelp")
+		{
+			HandleSignatureHelpRequest(params, idItem);
 			return;
 		}
 		if (method == "textDocument/semanticTokens/full")
@@ -734,6 +748,11 @@ Json* Server::HandleInitialize(Json* params, std::string& outError)
 
 	capabilities->AddTrueToObject("hoverProvider");
 	capabilities->AddTrueToObject("foldingRangeProvider");
+
+	Json* signatureHelpProvider = AddObject(capabilities, "signatureHelpProvider");
+	Json* signatureTriggers = AddArray(signatureHelpProvider, "triggerCharacters");
+	signatureTriggers->AddItemToArray(Json::CreateString("("));
+	signatureTriggers->AddItemToArray(Json::CreateString(","));
 
 	Json* semanticTokensProvider = AddObject(capabilities, "semanticTokensProvider");
 	Json* semanticLegend = AddObject(semanticTokensProvider, "legend");
@@ -1463,6 +1482,102 @@ void Server::SendFoldingRangeResponse(WorkResult& result)
 	}
 
 	response->AddItemToObject("result", ranges);
+	WriteLspMessage(response);
+}
+
+void Server::HandleSignatureHelpRequest(Json* params, Json* idItem)
+{
+	int offset = 0;
+	OpenDocument* document = GetRequestDocument(params, idItem, "signature help", offset);
+	if (document == NULL)
+		return;
+
+	EnsureStartup();
+
+	WorkItem item;
+	item.mKind = WorkItem::Kind::SignatureHelp;
+	item.mPath = document->mPath;
+	item.mText = document->mText;
+	item.mCursorOffset = offset;
+	item.mRequestId = Json::Duplicate(idItem, 1);
+	item.mRequestVersion = document->mVersion;
+	EnqueueWork(std::move(item), mWorkspaceReady);
+}
+
+void Server::SendSignatureHelpResponse(WorkResult& result)
+{
+	Json* id = result.mRequestId;
+	result.mRequestId = NULL;
+
+	Json* response = Json::CreateObject();
+	response->AddStringToObject("jsonrpc", "2.0");
+	response->AddItemToObject("id", (id != NULL) ? id : Json::CreateNull());
+
+	CompletionInfo info;
+	ParseCompletionInfo(result.mSignatureInfo, info);
+
+	if (info.mInvokes.empty())
+	{
+		response->AddItemToObject("result", Json::CreateNull());
+		WriteLspMessage(response);
+		return;
+	}
+
+	int activeSignature = 0;
+	if ((info.mInvokeSelect >= 0) && (info.mInvokeSelect < (int)info.mInvokes.size()))
+		activeSignature = info.mInvokeSelect;
+
+	// mInvokePositions is [openParen, comma1, comma2, ..., invocationEnd], so the
+	// active parameter is the number of separators behind the cursor minus one.
+	int activeParameter = -1;
+	for (int position : info.mInvokePositions)
+	{
+		if (result.mCursorOffset > position)
+			activeParameter++;
+	}
+	if (activeParameter < 0)
+		activeParameter = 0;
+
+	const auto& activeInvoke = info.mInvokes[activeSignature];
+	if (!activeInvoke.mParameters.empty() && (activeParameter >= (int)activeInvoke.mParameters.size()))
+		activeParameter = (int)activeInvoke.mParameters.size() - 1;
+	if (activeParameter < 0)
+		activeParameter = 0;
+
+	Json* resultObj = Json::CreateObject();
+	Json* signatures = AddArray(resultObj, "signatures");
+	for (const auto& invoke : info.mInvokes)
+	{
+		Json* signature = Json::CreateObject();
+		signature->AddStringToObject("label", invoke.mLabel.c_str());
+
+		if (!invoke.mDocumentation.empty())
+		{
+			Json* documentation = AddObject(signature, "documentation");
+			documentation->AddStringToObject("kind", "markdown");
+			documentation->AddStringToObject("value", invoke.mDocumentation.c_str());
+		}
+
+		if (!invoke.mParameters.empty())
+		{
+			Json* parameters = AddArray(signature, "parameters");
+			for (const auto& range : invoke.mParameters)
+			{
+				Json* parameter = Json::CreateObject();
+				Json* label = Json::CreateArray();
+				label->AddItemToArray(Json::CreateNumber(range.first));
+				label->AddItemToArray(Json::CreateNumber(range.second));
+				parameter->AddItemToObject("label", label);
+				parameters->AddItemToArray(parameter);
+			}
+		}
+
+		signatures->AddItemToArray(signature);
+	}
+
+	resultObj->AddNumberToObject("activeSignature", activeSignature);
+	resultObj->AddNumberToObject("activeParameter", activeParameter);
+	response->AddItemToObject("result", resultObj);
 	WriteLspMessage(response);
 }
 

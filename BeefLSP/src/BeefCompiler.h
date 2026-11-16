@@ -121,6 +121,10 @@ public:
 	// documentation), using the same resolve the IDE's mouseover uses.
 	bool Hover(const std::string& filePath, const std::string& text, int cursorOffset, std::string& outMarkdown);
 
+	// Raw autocomplete payload for 'cursorOffset' (used for signature help);
+	// unlike Autocomplete this never triggers a re-resolve.
+	bool GetInvokeInfo(const std::string& filePath, const std::string& text, int cursorOffset, std::string& outInfo);
+
 	// Collapsible regions for the document (methods, blocks, comments, ...).
 	bool GetFoldingRanges(const std::string& filePath, std::vector<FoldingRange>& outRanges);
 

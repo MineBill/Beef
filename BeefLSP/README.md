@@ -7,7 +7,7 @@ reimplementation: the same `BfSystem` / `BfParser` / `BfCompiler` /
 here from C++.
 
 Current feature set: **completion** (with `completionItem/resolve`
-documentation and trigger on `.`), **go-to-definition**
+documentation and trigger on `.`), **signature help**, **go-to-definition**
 (including locals and method overloads resolved through
 `BfResolveType_GoToDefinition`), **hover**, **folding ranges**, **semantic
 highlighting**, **diagnostics** (errors and warnings from the resolve pass, plus
@@ -44,6 +44,16 @@ Go-to-definition reuses the same single-file pipeline with
 Targets inside comptime-generated code (`$Emit$<project:TypeName>`) are exposed
 through the `beef-emit:` URI scheme; the client asks for the text with the
 `beef/emitSource` request.
+
+## Signature help
+
+The autocomplete payload produced for a cursor inside a call also carries
+`invoke` lines (one per overload, with `\x01` marking each parameter),
+`invokeInfo` (the best overload plus the byte offset where each argument starts)
+and `invokeLeftParen`. The server turns those into `SignatureHelp`: parameter
+label ranges come from the markers, `activeSignature` from `invokeInfo`, and
+`activeParameter` is the number of argument starts before the cursor. No extra
+resolve pass is needed beyond the one completion already runs.
 
 ## Hover and folding
 
@@ -237,7 +247,7 @@ the VS Code extension). Files that are no longer mentioned are cleared.
 
 * Full document sync (`textDocumentSync.change = 1`). Fine for typical files,
   but every keystroke re-sends the document.
-* No references, rename, signature help or formatting yet. The compiler
+* No references, rename or formatting yet. The compiler
   endpoints for those (`BfResolveType_*`) are already reachable from
   `BeefCompilerHost`.
 * Only the macros the IDE always defines are passed (`BF_MACHINE_X64`,

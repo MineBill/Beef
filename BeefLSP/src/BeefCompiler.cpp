@@ -1159,6 +1159,16 @@ bool BeefCompilerHost::GetEmitSource(const std::string& typeName, std::string& o
 	return true;
 }
 
+bool BeefCompilerHost::GetInvokeInfo(const std::string& filePath, const std::string& text, int cursorOffset, std::string& outInfo)
+{
+	outInfo.clear();
+	if (!mCompiled || (mCompiler == NULL))
+		return false;
+
+	RunAutocompletePass(filePath, text, cursorOffset, outInfo);
+	return !outInfo.empty();
+}
+
 bool BeefCompilerHost::GetEmitOrigin(const std::string& typeName, int emitLine, DefinitionLocation& outLocation)
 {
 	outLocation = DefinitionLocation();

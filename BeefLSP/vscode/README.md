@@ -10,6 +10,7 @@ parent directory), which drives the same C++ compiler frontend as the Beef IDE.
   dependencies) with documentation on resolve.
 * Go to definition for types, members and locals.
 * Hover with the symbol signature and its documentation.
+* Signature help for calls (all overloads, active parameter tracked as you type).
 * Semantic highlighting of resolved symbols (types, methods, properties, locals,
   parameters) from the compiler's classifier; keywords, comments and literals
   keep the grammar's colours.
@@ -22,8 +23,7 @@ parent directory), which drives the same C++ compiler frontend as the Beef IDE.
   highlighting) instead of opening a tab.
 * Status bar entry and a `Beef: Restart Language Server` command.
 
-Hover, references, rename, signature help and formatting are not implemented in
-the server yet.
+Hover, references, rename and formatting are not implemented in the server yet.
 
 ## Requirements
 

@@ -72,12 +72,93 @@ void ParseCompletionInfo(const std::string& info, CompletionInfo& outInfo)
 			continue;
 		}
 
-		// Signature/invoke widget data. Not used for completion yet.
-		if ((entryType == "invoke") || (entryType == "invoke_cur") || (entryType == "invokeInfo") ||
-			(entryType == "invokeLeftParen") || (entryType == "isMember"))
+		// Signature/invoke widget data.
+		if ((entryType == "invoke") || (entryType == "invoke_cur"))
 		{
+			std::string documentation;
+			size_t docPos = entryRest.find('\x03');
+			if (docPos != std::string::npos)
+			{
+				documentation = entryRest.substr(docPos + 1);
+				for (char& c : documentation)
+				{
+					if (c == '\x03')
+						c = '\n';
+				}
+				entryRest = entryRest.substr(0, docPos);
+			}
+
+			// Drop the trailing "\t<argMatchCount>".
+			size_t lastTab = entryRest.rfind('\t');
+			std::string text = (lastTab == std::string::npos) ? entryRest : entryRest.substr(0, lastTab);
+
+			// The compiler marks each parameter with \x01, e.g.
+			//   "void Console.WriteLine(\x01String value\x01)"
+			InvokeSignature signature;
+			signature.mDocumentation = documentation;
+
+			std::vector<std::string> parts;
+			size_t partStart = 0;
+			while (true)
+			{
+				size_t marker = text.find('\x01', partStart);
+				if (marker == std::string::npos)
+				{
+					parts.push_back(text.substr(partStart));
+					break;
+				}
+				parts.push_back(text.substr(partStart, marker - partStart));
+				partStart = marker + 1;
+			}
+
+			std::vector<int> partOffsets;
+			for (const auto& part : parts)
+			{
+				partOffsets.push_back((int)signature.mLabel.size());
+				signature.mLabel += part;
+			}
+
+			for (size_t idx = 1; idx + 1 < parts.size(); idx++)
+			{
+				int start = partOffsets[idx];
+				int end = start + (int)parts[idx].size();
+				while ((start < end) && (signature.mLabel[start] == ' '))
+					start++;
+				while ((end > start) && ((signature.mLabel[end - 1] == ' ') || (signature.mLabel[end - 1] == ',')))
+					end--;
+				signature.mParameters.emplace_back(start, end);
+			}
+
+			outInfo.mInvokes.push_back(std::move(signature));
 			continue;
 		}
+
+		if (entryType == "invokeInfo")
+		{
+			// "<bestIdx> <argStartPos>..."
+			size_t pos = 0;
+			bool first = true;
+			while (pos < entryRest.size())
+			{
+				size_t space = entryRest.find(' ', pos);
+				std::string token = (space == std::string::npos) ? entryRest.substr(pos) : entryRest.substr(pos, space - pos);
+				pos = (space == std::string::npos) ? entryRest.size() : space + 1;
+				if (token.empty())
+					continue;
+				int value = atoi(token.c_str());
+				if (first)
+				{
+					outInfo.mInvokeSelect = value;
+					first = false;
+				}
+				else
+					outInfo.mInvokePositions.push_back(value);
+			}
+			continue;
+		}
+
+		if ((entryType == "invokeLeftParen") || (entryType == "isMember"))
+			continue;
 
 		// Fixits are code actions, not completions, and embed a payload after
 		// the display text.

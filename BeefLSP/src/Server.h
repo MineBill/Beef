@@ -49,6 +49,7 @@ private:
 			EmitSource,
 			Hover,
 			FoldingRange,
+			SignatureHelp,
 			SemanticTokens
 		};
 
@@ -76,6 +77,7 @@ private:
 		int mEmitVersion = -1;
 		std::string mHoverMarkdown;
 		std::vector<FoldingRange> mFoldingRanges;
+		std::string mSignatureInfo;
 		std::vector<SemanticToken> mSemanticTokens;
 		int mCursorOffset = 0;
 		Beefy::Json* mRequestId = NULL;
@@ -123,6 +125,8 @@ private:
 	void SendHoverResponse(WorkResult& result);
 	void HandleFoldingRangeRequest(Beefy::Json* params, Beefy::Json* idItem);
 	void SendFoldingRangeResponse(WorkResult& result);
+	void HandleSignatureHelpRequest(Beefy::Json* params, Beefy::Json* idItem);
+	void SendSignatureHelpResponse(WorkResult& result);
 	void HandleSemanticTokensRequest(Beefy::Json* params, Beefy::Json* idItem);
 	void SendSemanticTokensResponse(WorkResult& result);
 	Beefy::Json* HandleCompletionResolve(Beefy::Json* params, std::string& outError);
