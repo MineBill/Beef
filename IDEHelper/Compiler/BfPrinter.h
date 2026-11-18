@@ -101,6 +101,7 @@ public:
 	bool mIsFirstStatementInBlock;
 	bool mForceUseTrivia;
 	bool mInSideChannel;
+	bool mInEnumCaseDeclaration;
 
 	int mStateModifyVirtualIndentLevel;
 	int mVirtualIndentLevel;

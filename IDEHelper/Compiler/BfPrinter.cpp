@@ -34,6 +34,7 @@ BfPrinter::BfPrinter(BfRootNode *rootNode, BfRootNode *sidechannelRootNode, BfRo
 	mFormatStart = -1;
 	mFormatEnd = -1;
 	mInSideChannel = false;
+	mInEnumCaseDeclaration = false;
 	mCharMapping = NULL;
 	mExpectingNewLine = false;
 	mCurBlockMember = NULL;
@@ -2963,7 +2964,8 @@ void BfPrinter::Visit(BfFieldDeclaration* fieldDeclaration)
 	{
 		if (!isEnumDecl)
 			ExpectNewLine();
-		if (fieldDeclaration->mAttributes != NULL)
+		// Enum case attributes are printed by BfEnumCaseDeclaration, before the 'case' token
+		if ((fieldDeclaration->mAttributes != NULL) && (!mInEnumCaseDeclaration))
 		{
 			QueueVisitChild(fieldDeclaration->mAttributes);
 			ExpectNewLine();
@@ -3014,6 +3016,14 @@ void BfPrinter::Visit(BfEnumCaseDeclaration* enumCaseDeclaration)
 {
 	ExpectNewLine();
 
+	// Attributes are stored on the first entry, but they must be printed before the 'case' token
+	BfAttributeDirective* attributes = NULL;
+	if ((!mDocPrep) && (!enumCaseDeclaration->mEntries.IsEmpty()))
+		attributes = enumCaseDeclaration->mEntries[0]->mAttributes;
+
+	if (attributes != NULL)
+		VisitChild(attributes);
+
 	Visit(enumCaseDeclaration->ToBase());
 
 	if (mDocPrep)
@@ -3030,6 +3040,13 @@ void BfPrinter::Visit(BfEnumCaseDeclaration* enumCaseDeclaration)
 		}
 		return;
 	}
+
+	// The base visit above handles the newline when the case has no attributes, but when
+	//  attributes are present the 'case' token handles the newline after them
+	if (attributes != NULL)
+		ExpectNewLine();
+
+	SetAndRestoreValue<bool> prevInEnumCaseDeclaration(mInEnumCaseDeclaration, true);
 
 	VisitChild(enumCaseDeclaration->mCaseToken);
 	ExpectSpace();
