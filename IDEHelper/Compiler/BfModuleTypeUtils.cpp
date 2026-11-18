@@ -13671,6 +13671,14 @@ BfIRValue BfModule::CastToFunction(BfAstNode* srcNode, const BfTypedValue& targe
 {
 	auto invokeMethodInstance = GetDelegateInvokeMethod(toType->ToTypeInstance());
 
+	auto _ThisTypeAccepts = [&](BfType* methodThisType, BfType* invokeThisType)
+	{
+		// Value types keep their own layout and an interface method has no body to bind, so both need an exact match
+		if ((methodThisType->IsValueType()) || (invokeThisType->IsValueType()) || (methodThisType->IsInterface()))
+			return methodThisType == invokeThisType;
+		return TypeIsSubTypeOf(invokeThisType->ToTypeInstance(), methodThisType->ToTypeInstance());
+	};
+
 	bool methodsThisMatch = true;
 	if (invokeMethodInstance->mMethodDef->mIsStatic != methodInstance->mMethodDef->mIsStatic)
 		methodsThisMatch = false;
@@ -13684,7 +13692,7 @@ BfIRValue BfModule::CastToFunction(BfAstNode* srcNode, const BfTypedValue& targe
 			BfType* invokeThisType = invokeMethodInstance->GetThisType();
 			if (invokeThisType->IsPointer())
 				invokeThisType = invokeThisType->GetUnderlyingType();
-			if (!TypeIsSubTypeOf(thisType->ToTypeInstance(), invokeThisType->ToTypeInstance()))
+			if (!_ThisTypeAccepts(thisType, invokeThisType))
 				methodsThisMatch = false;
 		}
 	}
@@ -13755,7 +13763,7 @@ BfIRValue BfModule::CastToFunction(BfAstNode* srcNode, const BfTypedValue& targe
 						invokeThisWasPtr = true;
 					}
 
-					if (TypeIsSubTypeOf(thisType->ToTypeInstance(), invokeThisType->ToTypeInstance()))
+					if (_ThisTypeAccepts(thisType, invokeThisType))
 					{
 						if (invokeThisWasPtr != thisWasPtr)
 						{
@@ -13765,6 +13773,16 @@ BfIRValue BfModule::CastToFunction(BfAstNode* srcNode, const BfTypedValue& targe
 								Fail(StrFormat("Non-static method '%s' cannot match '%s', consider adding 'mut' specifier to '%s this' in the function parameters", MethodToString(methodInstance).c_str(), TypeToString(toType).c_str(), TypeToString(thisType).c_str()), srcNode);
 							handled = true;
 						}
+					}
+					else if ((thisType->IsValueType()) || (invokeThisType->IsValueType()))
+					{
+						Fail(StrFormat("Non-static method '%s' cannot match '%s', a value type 'this' must be exactly '%s'", MethodToString(methodInstance).c_str(), TypeToString(toType).c_str(), TypeToString(thisType).c_str()), srcNode);
+						handled = true;
+					}
+					else if (TypeIsSubTypeOf(thisType->ToTypeInstance(), invokeThisType->ToTypeInstance()))
+					{
+						Fail(StrFormat("Non-static method '%s' cannot match '%s' because a '%s' passed as 'this' is not necessarily a '%s'", MethodToString(methodInstance).c_str(), TypeToString(toType).c_str(), TypeToString(invokeThisType).c_str(), TypeToString(thisType).c_str()), srcNode);
+						handled = true;
 					}
 				}
 			}
@@ -15641,8 +15659,20 @@ BfTypedValue BfModule::Cast(BfAstNode* srcNode, const BfTypedValue& typedVal, Bf
 							nameMatches = fromParamName == toParamName;
 					}
 
+					bool typeMatches = fromMethodInst->GetParamType(paramIdx) == toMethodInst->GetParamType(paramIdx);
+					if ((!typeMatches) && (paramIdx == 0) && (fromMethodInst->HasExplicitThis()))
+					{
+						// Calling through the new type passes a 'this' of its type, which the function accepts when that derives from
+						//  its own 'this' type. This matches what CastToFunction allows when binding a method. Value types keep exact
+						//  matches, as their layouts differ
+						auto fromThisType = fromMethodInst->GetParamType(paramIdx);
+						auto toThisType = toMethodInst->GetParamType(paramIdx);
+						if ((fromThisType->IsObjectOrInterface()) && (toThisType->IsObjectOrInterface()))
+							typeMatches = TypeIsSubTypeOf(toThisType->ToTypeInstance(), fromThisType->ToTypeInstance());
+					}
+
 					if ((fromMethodInst->GetParamKind(paramIdx) == toMethodInst->GetParamKind(paramIdx)) &&
-						(fromMethodInst->GetParamType(paramIdx) == toMethodInst->GetParamType(paramIdx)) &&
+						(typeMatches) &&
 						(nameMatches))
 					{
 						// Matched, required for implicit/explicit
@@ -15882,7 +15912,7 @@ bool BfModule::TypeIsSubTypeOf(BfTypeInstance* srcType, BfTypeInstance* wantType
 
 	if (wantType->IsInterface())
 	{
-		if (wantType->mDefineState < BfTypeDefineState_HasInterfaces_All)
+		if (srcType->mDefineState < BfTypeDefineState_HasInterfaces_All)
 			PopulateType(srcType, BfPopulateType_Interfaces_All);
 
 		BfTypeDef* checkActiveTypeDef = NULL;
